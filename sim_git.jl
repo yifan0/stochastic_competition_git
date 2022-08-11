@@ -55,9 +55,8 @@ end
 
 function simulation(nrep,step)
     # Do simulations for each copy at specific step
-    for n in 1:nrep
-        # Multi-thread
-        Threads.@spawn begin
+    # Multi-threading
+    Threads.@threads for n in 1:nrep
         # Initiate as the nth copy
         init = landrept[:,:,n]
         # Save the simulation result at the endtime
@@ -69,7 +68,6 @@ function simulation(nrep,step)
         init=init/mean(init)
         # replace the nth copy with the simulated result
         landrept[:,:,n] = init
-        end
     end
     println(step)
 end
