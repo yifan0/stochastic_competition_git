@@ -14,6 +14,6 @@ We are computing
 In sim_git.jl, for each of the 100 timesteps and each of the 10 simulations, the code simulates $N_y$ with speciation and invasion rules.
 
 In measure_git.jl, for each sample size $i$, the code
-1. takes $(size-i)$ number of $i\times i$ samples in each of the 10 independent simulations and measures the width/diversity/range of each of them.
-2. averages the width/diversity/range over the $(size-i)\quad i\times i$ samples.
+1. takes all $i\times i$ samples in each of the 10 independent simulations and measures the width/diversity/range of each of them.
+2. averages the width/diversity/range over the all $i\times i$ samples.
 3. averages the width/diversity/range over the 10 independent simulations
