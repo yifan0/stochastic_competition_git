@@ -2,21 +2,30 @@
 using DynamicGrids, Crayons, StatsBase, Plots, DataFrames, GLM, Random, JLD
 Random.seed!(1234)
 # 10 independent simulations of 129X129 system
+# no biological reason for using 10
+# size should be large enough (compared with speciation rate) such that there are enough species generated.
 nrep=10
 size = 129
 # Each patch is initialized to have a species with 1.0 effective population (fitness)
 landrept = fill(1.0,size,size,nrep)
 # 1/p individuals in each patch
+# p could be other values, e.g., p = 0.5. Changing p affects the mutation & invasion rates
 p = .1
 # mutation size is 0.1
+# no biological reason for 0.1. smaller mutation size may give less fluctuating results in variance measurement
 mutsize = 0.1
 # speciation rate is 1.0e-4
+# We try to push speciation rate to be as small as possible
 specrate = 1.0e-4
 
 # timescale of simulation is proportional to size
+# According to KPZ results, theoretically the system converges after such time period.
+# According to our simulation, the system has already converged in 1/10 of the timescale below.
 timescale = floor(Int, 100*(1/p)*size^(1))
-# divide the total simulation time into 100 steps
+# divide the total simulation time into 100 steps. We do renormalization after each step so that the effective population values are not too high.
+# no biological reason for 100
 nsteps=100
+# simulation time of each step
 endtime = floor(Int,timescale/nsteps)
 println(timescale,endtime)
 
@@ -24,6 +33,9 @@ println(timescale,endtime)
 # Speciation rule (uses DynamicGrids package)
 spec_rule = let prob_mut=specrate, mutsize = 0.1
     Cell() do data, cell, I
+        randvalue = rand()
+        # a mutation occurs with probability prob_mut*probsuccess, so if the randvalue > prob_mut, the mutation cannot occur
+        if randvalue < prob_mut
         # Effecive population could either increase or decrease in a speciation event
         upordown=sample([1,-1])
         # The ratio of effective populatoin between new species and old one
@@ -32,22 +44,35 @@ spec_rule = let prob_mut=specrate, mutsize = 0.1
         # new_eff_pop * p / (new_eff_pop * p + old_eff_pop * (1-p)). After simplification we get:
         probsuccess = p*ratio/(p*(ratio-1)+1)
         # If the new species wins, replace the cell with the new effective population, otherwise keep the original value
-        rand() <= prob_mut*probsuccess ? cell*ratio : cell
+        randvalue <= prob_mut*probsuccess ? cell*ratio : cell
+        else
+            cell
+        end
 end
 end
 
 # Invasion rule (uses DynamicGrids package)
 nbr_rule = let prob_inv=1
     Neighbors(Moore(1)) do data, neighborhood, cell, I
-        # Label neighbors
-        nbrvalues = [neighborhood[1],neighborhood[2],neighborhood[3],neighborhood[4],neighborhood[5],neighborhood[6],neighborhood[7],neighborhood[8]]
-        # Probability of being invaded by each neighbors:
-        # neighbor_eff_pop * p / (neighbor_eff_pop * p + self_eff_pop * (1-p)).
-        inv=p*nbrvalues./(p*nbrvalues+fill(cell*(1-p),8)) 
-        # Probability of invasion labeled with neighbor index
-        invindex = wsample(collect(1:8),inv)
-        # If invasion happens, replace with the neighbor's effective population
-        rand() <= mean(inv) ? neighborhood[invindex] : cell
+        randvalue = rand()
+        # an invasion occurs when randvalue < mean(inv)
+        # suppose neighbor values are not 2X larger than the current cell, then inv calculated below is < 0.18, so if randvalue > 0.2, the invasion cannot occur.
+        if randvalue < 0.2
+            # Label neighbors
+            nbrvalues = [neighborhood[1],neighborhood[2],neighborhood[3],neighborhood[4],neighborhood[5],neighborhood[6],neighborhood[7],neighborhood[8]]
+            # neighbor_eff_pop * p / (neighbor_eff_pop * p + self_eff_pop * (1-p)).
+            inv=p*nbrvalues./(p*nbrvalues+fill(cell*(1-p),8)) 
+            # If invasion happens, replace with the neighbor's effective population
+            if randvalue <= mean(inv)
+                # Probability of invasion labeled with neighbor index
+                invindex = wsample(collect(1:8),inv)
+                neighborhood[invindex]
+            else
+                cell
+            end
+        else
+            cell
+        end
 end
 end
 
