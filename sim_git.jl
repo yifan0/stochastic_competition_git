@@ -137,6 +137,6 @@ end
 
 # Save the 10 independent copies of size*size system
 println("Grid average = ", mean(landrept))
-println(landrept)
+#println(landrept)
 save("LH2D129-4.jld", "data",landrept)
 
