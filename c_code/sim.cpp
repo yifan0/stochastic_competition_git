@@ -2,6 +2,7 @@
 #include <random> // rand()
 #include <string.h> // memcpy()
 #include <queue> // queue
+#include <omp.h>
 using namespace std;
 
 #define println(...) { printf(__VA_ARGS__); printf("\n"); }
@@ -45,8 +46,8 @@ cellUpdateRecord newCellUpdateRecord(int x, int y, cell_type val) {
 }
 
 int main(int argc, char* argv[]){
-    int nrep = 1;
-    int size = 128;
+    int nrep = 10;
+    int size = 512;
     double p = 0.1;
     double mutsize = 0.1;
     double specrate = 0.0001; // 1.0e-4
@@ -54,23 +55,6 @@ int main(int argc, char* argv[]){
     int nsteps = 100;
     int endtime = timescale/nsteps;
     std::string outfile = "cpptest128grid_result.txt";
-
-    // grid for land data
-    // strategy from: https://stackoverflow.com/questions/46354262/how-to-dynamically-allocate-a-contiguous-2d-array-in-c
-    std::vector<cell_type> land_grid_data(size*size);
-    std::vector<cell_type*> land_grid_arrays;
-    for(int i = 0; i != size*size; i += size) {
-        land_grid_arrays.push_back(land_grid_data.data() + i);
-    }
-    cell_type** land_grid = land_grid_arrays.data();
-
-    // grid for old land data to save from previous iteration
-    std::vector<cell_type> old_land_grid_data(size*size);
-    std::vector<cell_type*> old_land_grid_arrays;
-    for(int i = 0; i != size*size; i += size) {
-        old_land_grid_arrays.push_back(old_land_grid_data.data() + i);
-    }
-    cell_type** old_land_grid = old_land_grid_arrays.data();
 
     // grid for average across reps
     std::vector<cell_type> mean_grid_data(size*size, 0); // fill grid with 0s
@@ -91,12 +75,32 @@ int main(int argc, char* argv[]){
     println("\tend time = %d", endtime);
     println("");
 
+    #pragma omp parallel for
     for(int rep = 0; rep < nrep; rep++) {
+        //println("Number of threads = %d", omp_get_num_threads());
+        // grid for land data
+        // strategy from: https://stackoverflow.com/questions/46354262/how-to-dynamically-allocate-a-contiguous-2d-array-in-c
+        std::vector<cell_type> land_grid_data(size*size);
+        std::vector<cell_type*> land_grid_arrays;
+        for(int i = 0; i != size*size; i += size) {
+            land_grid_arrays.push_back(land_grid_data.data() + i);
+        }
+        cell_type** land_grid = land_grid_arrays.data();
+
+        // grid for old land data to save from previous iteration
+        std::vector<cell_type> old_land_grid_data(size*size);
+        std::vector<cell_type*> old_land_grid_arrays;
+        for(int i = 0; i != size*size; i += size) {
+            old_land_grid_arrays.push_back(old_land_grid_data.data() + i);
+        }
+        cell_type** old_land_grid = old_land_grid_arrays.data();
+        
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size; j++) {
                 land_grid[i][j] = 1;
             }
         }
+        
         for(int step = 0; step < endtime; step++) {
             // do the speciation rule
             for(int i = 0; i < size; i++) {
@@ -117,7 +121,6 @@ int main(int argc, char* argv[]){
             }
             // do the neighbors rule
            
-
             // save updated local values as old_land_grid and fill land_grid with new vals
             swap(land_grid, old_land_grid);
             
@@ -178,23 +181,14 @@ int main(int argc, char* argv[]){
             }
         }
         println("Grid mean = %f for rep %d", land_grid_mean, rep);
+        #pragma omp critical
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size; j++) {
                 land_grid[i][j] /= land_grid_mean; // normalize grid
+                //#pragma omp critical
                 mean_grid[i][j] += land_grid[i][j]/nrep; // add contribution to average across reps
             }
         }
-
-        /*
-        println("Resulting grid:");
-        // TODO: write to file
-        for(int i = 0; i < size; i++) {
-            for(int j = 0; j < size; j++) {
-                print("%f", land_grid[i][j]);
-                print(" ");
-            }
-            println("");
-        }*/
     }
 
     FILE *fp;
