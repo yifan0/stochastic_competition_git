@@ -75,7 +75,6 @@ int main(int argc, char* argv[]){
     println("\tend time = %d", endtime);
     println("");
 
-    #pragma omp parallel for
     for(int rep = 0; rep < nrep; rep++) {
         //println("Number of threads = %d", omp_get_num_threads());
         // grid for land data
@@ -181,11 +180,9 @@ int main(int argc, char* argv[]){
             }
         }
         println("Grid mean = %f for rep %d", land_grid_mean, rep);
-        #pragma omp critical
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size; j++) {
                 land_grid[i][j] /= land_grid_mean; // normalize grid
-                //#pragma omp critical
                 mean_grid[i][j] += land_grid[i][j]/nrep; // add contribution to average across reps
             }
         }
