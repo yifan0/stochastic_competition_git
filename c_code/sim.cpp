@@ -54,7 +54,7 @@ int main(int argc, char* argv[]){
     int timescale = 100*size/p;
     int nsteps = 100;
     int endtime = timescale/nsteps;
-    std::string outfile = "cpptest128grid_result.txt";
+    std::string outfile = "cpptest_1k_grid_result.txt";
 
     // grid for average across reps
     std::vector<cell_type> mean_grid_data(size*size, 0); // fill grid with 0s
@@ -74,6 +74,7 @@ int main(int argc, char* argv[]){
     println("\tnsteps = %d", nsteps)
     println("\tend time = %d", endtime);
     println("");
+    fflush(stdout);
 
     for(int rep = 0; rep < nrep; rep++) {
         //println("Number of threads = %d", omp_get_num_threads());
@@ -180,6 +181,7 @@ int main(int argc, char* argv[]){
             }
         }
         println("Grid mean = %f for rep %d", land_grid_mean, rep);
+        fflush(stdout);
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size; j++) {
                 land_grid[i][j] /= land_grid_mean; // normalize grid
