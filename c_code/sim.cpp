@@ -8,6 +8,15 @@ using namespace std;
 #define println(...) { printf(__VA_ARGS__); printf("\n"); }
 #define print(...) { printf(__VA_ARGS__); }
 
+#define USAGE \
+"sim gridsize nreps outfile"
+
+#define HELPTEXT \
+"Simulate plant spread on grid\n\
+    gridsize : number of cells along an edge of the grid\n\
+    nreps : number of repetitions of the simulation\n\
+    outfile : output file name\n"
+
 enum DIRECTION { NW=0, N=1, NE=2, W=10, HERE=11, E=12, SW=20, S=21, SE=22 };
 
 typedef double cell_type;
@@ -54,7 +63,21 @@ int main(int argc, char* argv[]){
     int timescale = 100*size/p;
     int nsteps = 100;
     int endtime = timescale/nsteps;
-    std::string outfile = "cpptest_1k_grid_result.txt";
+    std::string outfile;
+
+    bool badargs = false;
+    if(argc < 3 || argc > 4) badargs = true;
+    if (argc < 2 || sscanf(argv[1],"%ld",&size) != 1 || size < 1)
+        badargs = true;
+    if (argc < 3 || sscanf(argv[2],"%ld",&nrep) != 1 || nrep < 1)
+        badargs = true;
+    if(argc > 3)
+       outfile = argv[3];
+
+    if(badargs) {
+        fprintf(stderr, ">E Usage: %s\n", USAGE);
+        exit(1);
+    }
 
     // grid for average across reps
     std::vector<cell_type> mean_grid_data(size*size, 0); // fill grid with 0s
@@ -76,6 +99,7 @@ int main(int argc, char* argv[]){
     println("");
     fflush(stdout);
 
+    #pragma omp parallel for
     for(int rep = 0; rep < nrep; rep++) {
         //println("Number of threads = %d", omp_get_num_threads());
         // grid for land data
@@ -175,16 +199,21 @@ int main(int argc, char* argv[]){
 
         // normalize the simulated result so that the fittest species will not have a very high effective population so that it always outcompetes other species
         float land_grid_mean = 0;
+        float tmp_sum = 0;
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size; j++) {
-                land_grid_mean += land_grid[i][j]/(size*size);
+                tmp_sum += land_grid[i][j];
+                //land_grid_mean += land_grid[i][j]/(size*size);
             }
+            land_grid_mean += tmp_sum/(size*size);
+            tmp_sum = 0;
         }
         println("Grid mean = %f for rep %d", land_grid_mean, rep);
         fflush(stdout);
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size; j++) {
                 land_grid[i][j] /= land_grid_mean; // normalize grid
+                #pragma omp critical
                 mean_grid[i][j] += land_grid[i][j]/nrep; // add contribution to average across reps
             }
         }
