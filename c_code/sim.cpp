@@ -56,12 +56,12 @@ cellUpdateRecord newCellUpdateRecord(int x, int y, cell_type val) {
 
 int main(int argc, char* argv[]){
     int nrep = 10;
-    int size = 512;
+    int size = 100;
     double p = 0.1;
     double mutsize = 0.1;
     double specrate = 0.0001; // 1.0e-4
     int timescale = 100*size/p;
-    int nsteps = 100;
+    int nsteps = 1;
     int endtime = timescale/nsteps;
     std::string outfile;
 
@@ -73,6 +73,8 @@ int main(int argc, char* argv[]){
         badargs = true;
     if(argc > 3)
        outfile = argv[3];
+    timescale = 100*(size*1.0/p);
+    endtime = timescale/nsteps;
 
     if(badargs) {
         fprintf(stderr, ">E Usage: %s\n", USAGE);
@@ -99,9 +101,7 @@ int main(int argc, char* argv[]){
     println("");
     fflush(stdout);
 
-    #pragma omp parallel for
     for(int rep = 0; rep < nrep; rep++) {
-        //println("Number of threads = %d", omp_get_num_threads());
         // grid for land data
         // strategy from: https://stackoverflow.com/questions/46354262/how-to-dynamically-allocate-a-contiguous-2d-array-in-c
         std::vector<cell_type> land_grid_data(size*size);
@@ -125,7 +125,7 @@ int main(int argc, char* argv[]){
             }
         }
         
-        for(int step = 0; step < endtime; step++) {
+        for(int step = 0; step < timescale; step++) {
             // do the speciation rule
             for(int i = 0; i < size; i++) {
                 for(int j = 0; j < size; j++) {
@@ -188,13 +188,25 @@ int main(int argc, char* argv[]){
                 }
             }
 
-            /*
-            cellUpdateRecord rec;
-            while(!cellUpdates.empty()) {
-                rec = cellUpdates.front();
-                land_grid[rec.y][rec.x] = rec.val;            
-                cellUpdates.pop();
-            }*/
+            // renormalize every nstep steps
+            if(step%nsteps == 0) {
+                float land_grid_mean = 0;
+                float tmp_sum = 0;
+                for(int i = 0; i < size; i++) {
+                    for(int j = 0; j < size; j++) {
+                        tmp_sum += land_grid[i][j];
+                    }
+                    land_grid_mean += tmp_sum/(size*size);
+                    tmp_sum = 0;
+                }
+                for(int i = 0; i < size; i++) {
+                    for(int j = 0; j < size; j++) {
+                        land_grid[i][j] /= land_grid_mean; // normalize grid
+                        mean_grid[i][j] += land_grid[i][j]/nrep; // add contribution to average across reps
+                    }
+                }
+            }
+
         }
 
         // normalize the simulated result so that the fittest species will not have a very high effective population so that it always outcompetes other species
@@ -203,7 +215,6 @@ int main(int argc, char* argv[]){
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size; j++) {
                 tmp_sum += land_grid[i][j];
-                //land_grid_mean += land_grid[i][j]/(size*size);
             }
             land_grid_mean += tmp_sum/(size*size);
             tmp_sum = 0;
@@ -213,7 +224,6 @@ int main(int argc, char* argv[]){
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size; j++) {
                 land_grid[i][j] /= land_grid_mean; // normalize grid
-                #pragma omp critical
                 mean_grid[i][j] += land_grid[i][j]/nrep; // add contribution to average across reps
             }
         }
