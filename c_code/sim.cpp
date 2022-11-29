@@ -61,7 +61,7 @@ int main(int argc, char* argv[]){
     double mutsize = 0.1;
     double specrate = 0.0001; // 1.0e-4
     int timescale = 100*size/p;
-    int nsteps = 1;
+    int nsteps = 100;
     int endtime = timescale/nsteps;
     std::string outfile;
 
