@@ -7,6 +7,7 @@
 #include <chrono>
 #include <set>
 #include <map>
+#include <numeric>
 //#include <algorithm>
 using namespace std;
 
@@ -106,7 +107,7 @@ int main(int argc, char* argv[]){
     // distribution for speciation events
     std::default_random_engine generator;
     std::binomial_distribution<int> speciation_distribution(size*size, specrate);
-    std::binomial_distribution<int> neighborhood_distribution(size*size, 0.2);
+    std::binomial_distribution<int> invasion_distribution(size*size, 0.2);
     std::uniform_real_distribution<double> real_distribution(0.0, 1.0);
     //std::minstd_rand0 minrand;
     //boost::random::mt19937 dis;
@@ -116,8 +117,8 @@ int main(int argc, char* argv[]){
     //std::uniform_real_distribution<> dis(0.0, 1.0);
     //
     // List of all indices to select from
-    std::vector<unsigned> all_cell_indices;
-    std::ranges::iota(all_cell_indices, 0);
+    //std::vector<unsigned> all_cell_indices;
+    //std::ranges::iota(all_cell_indices, 0);
     
     for(int rep = 0; rep < nrep; rep++) {
         rep_start_time = std::chrono::system_clock::now();
@@ -143,7 +144,7 @@ int main(int argc, char* argv[]){
             std::set<int> spec_events;
             while(spec_events.size() < speciation_event_count) {
                 int index = rand() % (size*size);
-                if(!spec_events.count(index) {
+                if(!spec_events.count(index)) {
                     int i = index % size;
                     int j = index / size;
                     spec_events.insert(index);
@@ -164,7 +165,7 @@ int main(int argc, char* argv[]){
             std::map<int, cell_type> invasion_events;
             while(invasion_events.size() < invasion_event_count) {
                 int index = rand() % (size*size);
-                if(!invasion_events.count(index) {
+                if(!invasion_events.count(index)) {
                     int i = index % size;
                     int j = index / size;
                     double randval = real_distribution(generator);
