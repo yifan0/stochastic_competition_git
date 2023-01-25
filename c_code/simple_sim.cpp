@@ -8,7 +8,7 @@
 #include <set>
 #include <map>
 #include <numeric>
-//#include <algorithm>
+#include <algorithm>
 using namespace std;
 
 #define println(...) { printf(__VA_ARGS__); printf("\n"); }
@@ -59,6 +59,7 @@ int main(int argc, char* argv[]){
     double p = 0.1;
     double mutsize = 0.1;
     double specrate = 0.0001; // 1.0e-4
+    double invrate = 0.2;
     int timescale = 100*size/p;
     int nsteps = 100;
     int endtime = timescale/nsteps;
@@ -97,6 +98,7 @@ int main(int argc, char* argv[]){
     println("\tindividuals per patch = %f", 1/p)
     println("\tmutation size = %f", mutsize)
     println("\tspeciation rate = %f", specrate)
+    println("\tinvasion rate = %f", invrate)
     println("\ttimescale = %d", timescale)
     println("\tnsteps = %d", nsteps)
     println("\tend time = %d", endtime);
@@ -109,16 +111,21 @@ int main(int argc, char* argv[]){
     std::binomial_distribution<int> speciation_distribution(size*size, specrate);
     std::binomial_distribution<int> invasion_distribution(size*size, 0.2);
     std::uniform_real_distribution<double> real_distribution(0.0, 1.0);
+    std::uniform_real_distribution<double> speciation_real_distribution(0.0, 0.2);
+
+    // Random generator for shuffle
+    std::random_device rd;
+    std::mt19937 g(rd());
     //std::minstd_rand0 minrand;
     //boost::random::mt19937 dis;
     //boost::random::uniform_real_distribution<double> gen(0.0, 1.0);
     //std::random_device rd;
     //std::mt19937 gen(rd());
     //std::uniform_real_distribution<> dis(0.0, 1.0);
-    //
+    
     // List of all indices to select from
-    //std::vector<unsigned> all_cell_indices;
-    //std::ranges::iota(all_cell_indices, 0);
+    std::vector<unsigned> all_cell_indices(size*size);
+    std::iota(all_cell_indices.begin(), all_cell_indices.end(), 0);
     
     for(int rep = 0; rep < nrep; rep++) {
         rep_start_time = std::chrono::system_clock::now();
@@ -136,6 +143,12 @@ int main(int argc, char* argv[]){
                 land_grid[i][j] = 1;
             }
         }
+
+        // invasion rule variables
+        cell_type neighborhood[8];
+        cell_type inv[8];
+        cell_type inv_sum = 0;
+        int inv_index = 0;
        
         for(int step = 0; step < timescale; step++) {
             
@@ -154,60 +167,61 @@ int main(int argc, char* argv[]){
                         ratio = 1/ratio;
                     }
                     float probsuccess = p*ratio/(p*(ratio-1)+1);
-                    if(real_distribution(generator) < specrate*probsuccess) {
+                    if(speciation_real_distribution(generator) < specrate*probsuccess) { // random value must be < 0.2 to have made it here
                         land_grid[i][j] *= ratio;
                     }
                 }
             }
-            
-            // do the invasion rule
-            int invasion_event_count = invasion_distribution(generator);
-            std::map<int, cell_type> invasion_events;
-            while(invasion_events.size() < invasion_event_count) {
-                int index = rand() % (size*size);
-                if(!invasion_events.count(index)) {
-                    int i = index % size;
-                    int j = index / size;
+           
+            // invasion rule
+            //std::map<int, cell_type> invasion_events;
+            for(int i = 0; i < size; i++) {
+                for(int j = 0; j < size; j++) {
+                    //double randval = 0.4;
                     double randval = real_distribution(generator);
-                    float neighborhood[8];
-                    float inv[8];
-                    float inv_sum = 0;
-                    int inv_index = 0;
-                    for(int x = -1; x < 1; x++) {
-                        for(int y = -1; y <= 1; y++) {
-                            if((x != 0 || y != 0) && i+x >= 0 && i+x < size && j+y >= 0 && j+y < size) {
-                                neighborhood[inv_index] = land_grid[i+x][j+y];
-                                inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
-                                inv_sum += inv[inv_index];
-                                inv_index++;
+                    if(false && randval < invrate) {
+                        inv_sum = 0;
+                        inv_index = 0;
+                        for(int x = -1; x < 1; x++) {
+                            for(int y = -1; y <= 1; y++) {
+                                if((x != 0 || y != 0) && i+x >= 0 && i+x < size && j+y >= 0 && j+y < size) {
+                                    neighborhood[inv_index] = land_grid[i+x][j+y];
+                                    inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
+                                    inv_sum += inv[inv_index];
+                                    inv_index++;
+                                }
                             }
                         }
-                    }
 
-                    if(randval <= inv_sum/8) {
-                        // Get random element with weighted probabilities
-                        std::uniform_real_distribution<double> weighted_dist(0, inv_sum);
-                        double weighted_rand = weighted_dist(generator);
-                        inv_index = 0;
-                        while(weighted_rand > inv[inv_index]) {
-                            weighted_rand -= inv[inv_index];
-                            inv_index++;
+                        if(randval <= inv_sum/8) {
+                            // Get random element with weighted probabilities
+                            std::uniform_real_distribution<double> weighted_dist(0, inv_sum);
+                            double weighted_rand = weighted_dist(generator);
+                            inv_index = 0;
+                            while(weighted_rand > inv[inv_index]) {
+                                weighted_rand -= inv[inv_index];
+                                inv_index++;
+                            }
+                            land_grid[i][j] = neighborhood[inv_index];
+                            // TODO: check for references to already changed cells -- instead of saving the modifications, try saving the originals and checking for conflicts
+                            //invasion_events[i*size + j] = neighborhood[inv_index];
                         }
-                        invasion_events[index] = neighborhood[inv_index];
-                    }
-                    else {
-                        invasion_events[index] = land_grid[i][j];
                     }
                 }
             }
 
             // For every invasion event, update the grid
+            //println("Number of invasion events on step %d = %d", step, invasion_events.size());
+            //fflush(stdout);
+            /*
             for(auto const& event : invasion_events) {
                 int i = event.first % size;
                 int j = event.first / size;
                 land_grid[i][j] = event.second;
             }
+            */
 
+            /*
             // renormalize every nstep steps
             if(step%nsteps == 0) {
                 float land_grid_mean = 0;
@@ -226,6 +240,7 @@ int main(int argc, char* argv[]){
                     }
                 }
             }
+            */
 
         }
 
