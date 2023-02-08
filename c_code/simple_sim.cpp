@@ -122,26 +122,7 @@ int main(int argc, char* argv[]){
     // distribution for speciation events
     std::default_random_engine generator;
     std::binomial_distribution<int> speciation_distribution(size*size, specrate);
-    std::binomial_distribution<int> invasion_distribution(size*size, 0.2);
-    std::uniform_real_distribution<double> real_distribution(0.0, 1.0);
-    std::uniform_real_distribution<double> speciation_real_distribution(0.0, 0.2);
 
-    // Random generator for shuffle
-    //std::random_device rd;
-    //std::mt19937 g(rd());
-    std::minstd_rand0 minrand;
-    //boost::random::mt19937 dis;
-    //boost::random::uniform_real_distribution<double> gen(0.0, 1.0);
-    //std::random_device rd;
-    //std::mt19937 gen(rd());
-    std::uniform_real_distribution<> dis(0.0, 1.0);
-    std::minstd_rand mr;
-    std::uniform_real_distribution<double> dist(0.0, 1.0);
-    
-    // List of all indices to select from
-    std::vector<unsigned> all_cell_indices(size*size);
-    std::iota(all_cell_indices.begin(), all_cell_indices.end(), 0);
-   
     for(int rep = 0; rep < nrep; rep++) {
         rep_start_time = std::chrono::system_clock::now();
         // grid for land data
@@ -178,12 +159,11 @@ int main(int argc, char* argv[]){
                     spec_events.insert(index);
                     int down = rand() % 2;
                     float ratio = (1+RanGen.Random()*mutsize);
-                    //float ratio = (1+real_distribution(generator)*mutsize);
                     if(down) {
                         ratio = 1/ratio;
                     }
                     float probsuccess = p*ratio/(p*(ratio-1)+1);
-                    if(speciation_real_distribution(generator) < specrate*probsuccess) { // random value must be < 0.2 to have made it here
+                    if(RanGen.Random() <= probsuccess) {
                         land_grid[i][j] *= ratio;
                     }
                 }
@@ -213,8 +193,7 @@ int main(int argc, char* argv[]){
 
                         if(randval <= inv_sum/8) {
                             // Get random element with weighted probabilities
-                            std::uniform_real_distribution<double> weighted_dist(0, inv_sum);
-                            double weighted_rand = weighted_dist(generator);
+                            double weighted_rand = RanGen.Random()*inv_sum;
                             inv_index = 0;
                             while(weighted_rand > inv[inv_index]) {
                                 weighted_rand -= inv[inv_index];
