@@ -190,14 +190,10 @@ int main(int argc, char* argv[]){
             }
            
             // invasion rule
-            std::map<int, cell_type> invasion_events;
             std::map<int, cell_type> invasion_event_archive;
             for(int i = 0; i < size; i++) {
                 for(int j = 0; j < size; j++) {
-                    //double randval = 0.4;
                     double randval = RanGen.Random(); //random_float();
-                    //double randval = real_distribution(generator);
-                    //double randval = dist(minrand);
                     if(randval < invrate) {
                         inv_sum = 0;
                         inv_index = 0;
@@ -227,20 +223,10 @@ int main(int argc, char* argv[]){
                             if(neighborhood[inv_index] != land_grid[i][j]) {
                                 land_grid[i][j] = neighborhood[inv_index];
                                 invasion_event_archive[i*size + j] = neighborhood[inv_index];
-                                //invasion_events[i*size + j] = neighborhood[inv_index];
                             }
                         }
                     }
                 }
-            }
-
-            // For every invasion event, update the grid
-            //println("Number of invasion events on step %d = %d", step, invasion_events.size());
-            //fflush(stdout);
-            for(auto const& event : invasion_events) {
-                int i = event.first % size;
-                int j = event.first / size;
-                land_grid[i][j] = event.second;
             }
 
             // renormalize every nstep steps
