@@ -23,7 +23,7 @@ matrix_basic: matrix_basic.cpp
 	$(MPICC) -std=gnu++17 -O3 $(BCL_BACKEND) -I../bcl -I$(BLAS_INC) -L$(BLAS_LIB) -lopenblas -o $@ $<
 
 petsc_sim: petsc_sim.c
-	$(CC) $(CFLAGS) -Irandomc -L$(PETSC_DIR)/lib -lpetsc -o $@ $< $(LD_FLAGS)
+	$(MPICC) $(CFLAGS) -Irandomc -L$(PETSC_DIR)/lib -lpetsc -o $@ $< $(LD_FLAGS)
 
 clean:
 	rm -f sim simple sim1d matrix_basic petsc_sim
