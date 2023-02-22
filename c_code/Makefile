@@ -8,7 +8,7 @@ BCL_BACKEND = -DBCL_BACKEND_MPI
 
 LD_FLAGS = $(GASNET_BACKEND_LIB_FLAGS)
 
-all: sim simple sim1d bcl_sim petsc_sim
+all: sim simple sim1d bcl_sim petsc_sim mpi_sim
 
 sim: sim.cpp
 	$(CC) $(CFLAGS) -o sim sim.cpp
@@ -22,11 +22,17 @@ sim1d: sim_1d.cpp
 bcl_sim: bcl_sim.cpp
 	$(MPICC) -std=gnu++17 -O3 $(BCL_BACKEND) -I../bcl -I$(BLAS_INC) -L$(BLAS_LIB) -lopenblas -Irandomc -o $@ $<
 
+mpi_sim: mpi_sim.cpp
+	$(MPICC) -std=gnu++17 -O3 -Irandomc -o $@ $<
+
 matrix_basic: matrix_basic.cpp
 	$(MPICC) -std=gnu++17 -O3 $(BCL_BACKEND) -I../bcl -I$(BLAS_INC) -L$(BLAS_LIB) -lopenblas -o $@ $<
 
 petsc_sim: petsc_sim.c
 	$(MPICC) $(CFLAGS) -Irandomc -L$(PETSC_DIR)/lib -lpetsc -o $@ $< $(LD_FLAGS)
+
+dash_sim: dash_narray.cpp
+	/home/ekoning2/opt/bin/dash-mpicxx $(CFLAGS) -I/home/ekoning2/scratch/dash/build -L/home/ekoning2/scratch/dash/build/lib -Irandomc -o $@ $<
 
 clean:
 	rm -f sim simple sim1d matrix_basic petsc_sim
