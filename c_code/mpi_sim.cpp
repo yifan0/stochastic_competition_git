@@ -248,6 +248,7 @@ int main(int argc, char* argv[]){
                     }
                 }
             }
+            println("Invasion events = %d", updates.size());
             for(const auto& [i, j, val] : updates) {
                 land_grid[i][j] = val;
                 if(i == 0 && top_proc != MPI_PROC_NULL) {
@@ -264,7 +265,7 @@ int main(int argc, char* argv[]){
                 }
             }
 
-            MPI_Win_fence(0, win);
+            //MPI_Win_fence(0, win);
 
             // renormalize every nstep steps
             // normalize the simulated result so that the fittest species will not have a very high effective population so that it always outcompetes other species
@@ -302,7 +303,7 @@ int main(int argc, char* argv[]){
     out_start_time = std::chrono::system_clock::now();
     FILE *fp;
     fp = fopen(outfile.c_str(), "w");
-    print("Writing to file %s\n", outfile);
+    print("Writing to file %s\n", outfile.c_str());
     for(int i = 0; i < sub_size; i++) {
         for(int j = 0; j < sub_size-1; j++) {
             fprintf(fp, "%f", mean_grid[i][j]);
