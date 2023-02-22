@@ -19,18 +19,19 @@ using namespace std;
 #define print(...) { printf(__VA_ARGS__); }
 
 #define USAGE \
-"sim gridsize nreps outfile"
+    "sim gridsize nreps outfile"
 
 #define HELPTEXT \
-"Simulate plant spread on grid\n\
-    gridsize : number of cells along an edge of the grid\n\
-    nreps : number of repetitions of the simulation\n\
-    outfile : output file name\n"
+    "Simulate plant spread on grid\n\
+gridsize : number of cells along an edge of the grid\n\
+nreps : number of repetitions of the simulation\n\
+outfile : output file name\n"
 
 typedef double cell_type;
 typedef std::tuple<int, int, cell_type> cell_update;
 
 int main(int argc, char* argv[]){
+    MPI_Init(&argc, &argv);
     int nrep = 10;
     int size = 100;
     //int local_size, nblocks, size;
@@ -42,30 +43,39 @@ int main(int argc, char* argv[]){
     int nsteps = 100;
     int endtime = timescale/nsteps;
     int rank, nprocs;
-    std::string outfile;
+    std::string outfile = "test_";
     std::chrono::time_point<std::chrono::system_clock> start_time, end_time, rep_start_time, rep_end_time, out_start_time, out_end_time;
 
-    MPI_Init(&argc, &argv);
+    //MPI_Init(&argc, &argv);
 
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     bool badargs = false;
-    if(argc < 3 || argc > 4) badargs = true;
-    if (argc < 2 || sscanf(argv[1],"%ld",&size) != 1 || size < 1)
-        badargs = true;
-    if (argc < 3 || sscanf(argv[2],"%ld",&nrep) != 1 || nrep < 1)
-        badargs = true;
-    if(argc > 3) {
-       outfile = argv[3];
-       outfile += rank + ".log";
+    if(argc < 1 || argc > 4) badargs = true;
+    if(argc > 1) {
+        size = stoi(argv[1]);
+        if(size < 1) {
+            badargs = true;
+        }
     }
+    if(argc > 2) {
+        nrep = stoi(argv[2]);
+        if(nrep < 1) {
+            badargs = true;
+        }
+    }
+    if(argc > 3) {
+        outfile = argv[3];
+    }
+    outfile += std::to_string(rank) + ".log";
     timescale = 100*(size*1.0/p);
     endtime = timescale/nsteps;
 
     if(badargs) {
-        fprintf(stderr, ">E Usage: %s\n", USAGE);
-        exit(1);
+        println(">E Usage: %s\n", USAGE);
+        MPI_Finalize();
+        return 1;
     }
 
     int sqrt_nprocs = (int) std::sqrt(nprocs);
@@ -75,33 +85,6 @@ int main(int argc, char* argv[]){
         MPI_Finalize();
         return 1;
     }
-    fprintf(stderr, "Rank %d: C\n", rank);
-
-    // Calculate the size of local submatrix
-    int sub_size = size / sqrt_nprocs;
-    int sub_size_remainder = size % sqrt_nprocs;
-    int sub_size_start = (rank % sqrt_nprocs) * sub_size;
-    if(rank % sqrt_nprocs > sub_size_remainder - 1) {
-        sub_size_start += sub_size_remainder;
-        sub_size -= 1;
-    }
-    int sub_size_end = sub_size_start + sub_size - 1;
-    if(rank % sqrt_nprocs == sub_size_remainder - 1) {
-        sub_size += 1;
-    }
-    fprintf(stderr, "Rank %d: B\n", rank);
-
-    start_time = std::chrono::system_clock::now();
-
-    // grid for average across reps
-    std::vector<cell_type> mean_grid_data((sub_size+2)*(sub_size+2), 0); // fill grid with 0s
-    std::vector<cell_type*> mean_grid_arrays;
-    for(int i = sub_size; i != sub_size*sub_size; i += sub_size) {
-        mean_grid_arrays.push_back(mean_grid_data.data() + i + 1);
-    }
-    cell_type** mean_grid = mean_grid_arrays.data();
-
-    fprintf(stderr, "Rank %d: A\n", rank);
 
     println("Inputs:")
         println("\tMPI ranks = %d", nprocs)
@@ -116,6 +99,32 @@ int main(int argc, char* argv[]){
         println("\tend time = %d", endtime);
     println("");
     fflush(stdout);
+
+    //print("Rank %d\n", rank);
+
+
+    // Calculate the size of local submatrix
+    int sub_size = size / sqrt_nprocs;
+    int sub_size_remainder = size % sqrt_nprocs;
+    int sub_size_start = (rank % sqrt_nprocs) * sub_size;
+    if(rank % sqrt_nprocs > sub_size_remainder - 1) {
+        sub_size_start += sub_size_remainder;
+        sub_size -= 1;
+    }
+    int sub_size_end = sub_size_start + sub_size - 1;
+    if(rank % sqrt_nprocs == sub_size_remainder - 1) {
+        sub_size += 1;
+    }
+
+    start_time = std::chrono::system_clock::now();
+
+    // grid for average across reps
+    std::vector<cell_type> mean_grid_data((sub_size+2)*(sub_size+2), 0); // fill grid with 0s
+    std::vector<cell_type*> mean_grid_arrays;
+    for(int i = sub_size; i != (sub_size+2)*(sub_size+2); i += sub_size+2) {
+        mean_grid_arrays.push_back(mean_grid_data.data() + i + 1);
+    }
+    cell_type** mean_grid = mean_grid_arrays.data();
 
     // Random number generation
     CRandomSFMT1 RanGen((int)time(NULL)); // Agner Combined generator
@@ -133,6 +142,8 @@ int main(int argc, char* argv[]){
 
     MPI_Win win;
     MPI_Win_create(&land_grid_data[0], (sub_size+2) * (sub_size+2) * sizeof(double), sizeof(double), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
+
+    MPI_Win_fence(0, win);
 
     // Exchange ghost cells with neighboring processes using one-sided communication
     MPI_Aint lb, extent;
@@ -201,6 +212,8 @@ int main(int argc, char* argv[]){
                 }
             }
 
+            MPI_Win_fence(0, win);
+
             // invasion rule
             std::vector<cell_update> updates;
             for(int i = 0; i < sub_size; i++) {
@@ -251,6 +264,8 @@ int main(int argc, char* argv[]){
                 }
             }
 
+            MPI_Win_fence(0, win);
+
             // renormalize every nstep steps
             // normalize the simulated result so that the fittest species will not have a very high effective population so that it always outcompetes other species
             if(step%nsteps == 0) {
@@ -287,6 +302,7 @@ int main(int argc, char* argv[]){
     out_start_time = std::chrono::system_clock::now();
     FILE *fp;
     fp = fopen(outfile.c_str(), "w");
+    print("Writing to file %s\n", outfile);
     for(int i = 0; i < sub_size; i++) {
         for(int j = 0; j < sub_size-1; j++) {
             fprintf(fp, "%f", mean_grid[i][j]);
