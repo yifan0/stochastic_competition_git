@@ -8,7 +8,7 @@ BCL_BACKEND = -DBCL_BACKEND_MPI
 
 LD_FLAGS = $(GASNET_BACKEND_LIB_FLAGS)
 
-all: sim simple sim1d bcl_sim petsc_sim mpi_sim
+all: mpi_sim
 
 sim: sim.cpp
 	$(CC) $(CFLAGS) -o sim sim.cpp
