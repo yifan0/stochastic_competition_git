@@ -43,7 +43,7 @@ int main(int argc, char* argv[]){
     int nsteps = 100;
     int endtime = timescale/nsteps;
     int rank, nprocs;
-    std::string outfile = "test_";
+    std::string outfile = "output_";
     std::chrono::time_point<std::chrono::system_clock> start_time, end_time, rep_start_time, rep_end_time, out_start_time, out_end_time;
 
     //MPI_Init(&argc, &argv);
@@ -107,7 +107,7 @@ int main(int argc, char* argv[]){
     int sub_size = size / sqrt_nprocs;
     int sub_size_remainder = size % sqrt_nprocs;
     int sub_size_start = (rank % sqrt_nprocs) * sub_size;
-    if(rank % sqrt_nprocs > sub_size_remainder - 1) {
+    if(rank % sqrt_nprocs > sub_size_remainder) {
         sub_size_start += sub_size_remainder;
         sub_size -= 1;
     }
@@ -116,15 +116,9 @@ int main(int argc, char* argv[]){
         sub_size += 1;
     }
 
-    start_time = std::chrono::system_clock::now();
+    println("Size for each process = %d", sub_size);
 
-    // grid for average across reps
-    std::vector<cell_type> mean_grid_data((sub_size+2)*(sub_size+2), 0); // fill grid with 0s
-    std::vector<cell_type*> mean_grid_arrays;
-    for(int i = sub_size; i != (sub_size+2)*(sub_size+2); i += sub_size+2) {
-        mean_grid_arrays.push_back(mean_grid_data.data() + i + 1);
-    }
-    cell_type** mean_grid = mean_grid_arrays.data();
+    start_time = std::chrono::system_clock::now();
 
     // Random number generation
     CRandomSFMT1 RanGen((int)time(NULL)); // Agner Combined generator
@@ -146,8 +140,6 @@ int main(int argc, char* argv[]){
     MPI_Win_fence(0, win);
 
     // Exchange ghost cells with neighboring processes using one-sided communication
-    MPI_Aint lb, extent;
-    MPI_Type_get_extent(MPI_DOUBLE, &lb, &extent);
     int top_proc = rank - sqrt_nprocs;
     int bottom_proc = rank + sqrt_nprocs;
     int left_proc = rank - 1;
@@ -158,7 +150,7 @@ int main(int argc, char* argv[]){
     if (rank % sqrt_nprocs == sqrt_nprocs - 1) {
         right_proc = MPI_PROC_NULL;
     }
-    if (rank < sqrt_nprocs) {
+    if (rank < sqrt_nprocs || nprocs == 1) {
         top_proc = MPI_PROC_NULL;
     }
     if (rank >= nprocs - sqrt_nprocs) {
@@ -219,12 +211,13 @@ int main(int argc, char* argv[]){
             for(int i = 0; i < sub_size; i++) {
                 for(int j = 0; j < sub_size; j++) {
                     double randval = RanGen.Random(); //random_float();
-                    if((randval < invrate)) {
+                    if(randval < invrate) {
                         inv_sum = 0;
                         inv_index = 0;
-                        for(int x = -1; x < 1; x++) {
+                        for(int x = -1; x <= 1; x++) {
                             for(int y = -1; y <= 1; y++) {
                                 if((x != 0 || y != 0) && (i+x >= 0 || left_proc != MPI_PROC_NULL) && (i+x < sub_size || right_proc != MPI_PROC_NULL) && (j+y >= 0 || top_proc != MPI_PROC_NULL) && (j+y < sub_size || bottom_proc != MPI_PROC_NULL)) {
+                                    neighborhood[inv_index] = land_grid[i+x][j+y];
                                     inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
                                     inv_sum += inv[inv_index];
                                     inv_index++;
@@ -248,7 +241,6 @@ int main(int argc, char* argv[]){
                     }
                 }
             }
-            println("Invasion events = %d", updates.size());
             for(const auto& [i, j, val] : updates) {
                 land_grid[i][j] = val;
                 if(i == 0 && top_proc != MPI_PROC_NULL) {
@@ -291,35 +283,41 @@ int main(int argc, char* argv[]){
         global_average /= nprocs;
         std::transform(land_grid_data.begin(), land_grid_data.end(), land_grid_data.begin(), [global_average](cell_type v) { return v / global_average; });
 
-        // Add values from land_grid to mean_grid
-        std::transform(mean_grid_data.begin(), mean_grid_data.end(), land_grid_data.begin(), mean_grid_data.begin(), std::plus<cell_type>());
-
         rep_end_time = std::chrono::system_clock::now();
         std::chrono::duration<double> rep_time = rep_end_time - rep_start_time;
         println("Rep %d run time = %fs", rep, rep_time.count());
         fflush(stdout);
+
+        // Output for this rep
+        out_start_time = std::chrono::system_clock::now();
+        if(argc > 3)
+            outfile = argv[3];
+        else
+            outfile = "output_";
+        outfile += "rep" + std::to_string(rep) + "_rank" + std::to_string(rank) + ".log";
+        FILE *fp;
+        fp = fopen(outfile.c_str(), "w");
+        print("Writing to file %s\n", outfile.c_str());
+        for(int i = 0; i < sub_size; i++) {
+            for(int j = 0; j < sub_size-1; j++) {
+                fprintf(fp, "%f", land_grid[i][j]);
+                fprintf(fp, ", ");
+            }
+            fprintf(fp, "%f\n", land_grid[i][sub_size-1]);
+        }
+        fflush(fp);
+        fclose(fp);
+        out_end_time = std::chrono::system_clock::now();
+        std::chrono::duration<double> out_time = out_end_time - out_start_time;
+        println("Output run time = %fs", out_time.count());
+        fflush(stdout);
+
+
     }
 
-    out_start_time = std::chrono::system_clock::now();
-    FILE *fp;
-    fp = fopen(outfile.c_str(), "w");
-    print("Writing to file %s\n", outfile.c_str());
-    for(int i = 0; i < sub_size; i++) {
-        for(int j = 0; j < sub_size-1; j++) {
-            fprintf(fp, "%f", mean_grid[i][j]);
-            fprintf(fp, ", ");
-        }
-        fprintf(fp, "%f\n", mean_grid[i][sub_size-1]);
-    }
-    fclose(fp);
-    out_end_time = std::chrono::system_clock::now();
-    std::chrono::duration<double> out_time = out_end_time - out_start_time;
-    println("Output run time = %fs", out_time.count());
-    fflush(stdout);
     end_time = std::chrono::system_clock::now();
     std::chrono::duration<double> total_time = end_time - start_time;
     println("Total run time = %fs", total_time.count());
-    println("Wrote reuslts to file %s", outfile.c_str());
     fflush(stdout);
 
     MPI_Finalize();
