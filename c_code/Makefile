@@ -5,6 +5,7 @@ CFLAGS=-I. -std=c++11 -O3
 BLAS_INC = /usr/local/src/openblas/0.3.12/gcc/Sandy.Bridge/include
 BLAS_LIB = /usr/local/src/openblas/0.3.12/gcc/Sandy.Bridge/lib
 BCL_BACKEND = -DBCL_BACKEND_MPI
+BOOST_INC := /usr/local/boost/1.71.0/include
 
 LD_FLAGS = $(GASNET_BACKEND_LIB_FLAGS)
 
@@ -26,7 +27,7 @@ mpi_sim: mpi_sim.cpp
 	$(MPICC) -std=gnu++17 -O3 -Irandomc -o $@ $<
 
 matrix_basic: matrix_basic.cpp
-	$(MPICC) -std=gnu++17 -O3 $(BCL_BACKEND) -I../bcl -I$(BLAS_INC) -L$(BLAS_LIB) -lopenblas -o $@ $<
+	$(MPICC) -std=gnu++17 -O3 $(BCL_BACKEND) -I../bcl -I$(BLAS_INC) -L$(BLAS_LIB) -I${BOOST_INC} -lopenblas -o $@ $<
 
 petsc_sim: petsc_sim.c
 	$(MPICC) $(CFLAGS) -Irandomc -L$(PETSC_DIR)/lib -lpetsc -o $@ $< $(LD_FLAGS)

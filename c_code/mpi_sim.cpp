@@ -13,6 +13,7 @@
 #include "sfmt.cpp"
 #include "userintf.cpp"
 #include <mpi.h>
+#include <boost/numeric/ublas/matrix.hpp>
 using namespace std;
 
 #define println(...) { if(rank == 0) { printf(__VA_ARGS__); printf("\n"); } }
@@ -126,16 +127,11 @@ int main(int argc, char* argv[]){
     std::default_random_engine generator;
     std::binomial_distribution<int> speciation_distribution(sub_size*sub_size, specrate);
 
-    // grid for repetition land data
-    std::vector<cell_type> land_grid_data((sub_size+2)*(sub_size+2), 1);
-    std::vector<cell_type*> land_grid_arrays;
-    for(int i = sub_size; i != (sub_size+2)*(sub_size+2); i += sub_size+2) {
-        land_grid_arrays.push_back(land_grid_data.data() + i + 1);
-    }
-    cell_type** land_grid = land_grid_arrays.data();
+    // grid for land data
+    boost::numeric::ublas::matrix<cell_type> land_grid(sub_size+2, sub_size+2);
 
     MPI_Win win;
-    MPI_Win_create(&land_grid_data[0], (sub_size+2) * (sub_size+2) * sizeof(double), sizeof(double), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
+    MPI_Win_create(&land_grid(0,0), (sub_size+2) * (sub_size+2) * sizeof(cell_type), sizeof(cell_type), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
 
     MPI_Win_fence(0, win);
 
@@ -161,7 +157,7 @@ int main(int argc, char* argv[]){
         rep_start_time = std::chrono::system_clock::now();
 
         // set all of land_grid_data to 1
-        std::fill(land_grid_data.begin(), land_grid_data.end(), 1);
+        std::fill(land_grid.begin1(), land_grid.end1(), 1);
 
         // invasion rule variables
         cell_type neighborhood[8];
@@ -187,18 +183,19 @@ int main(int argc, char* argv[]){
                     }
                     float probsuccess = p*ratio/(p*(ratio-1)+1);
                     if(RanGen.Random() <= probsuccess) {
-                        land_grid[i][j] *= ratio;
+                        i++; j++; // to account for ghost cells
+                        land_grid(i,j) *= ratio;
                         if(i == 0 && top_proc != MPI_PROC_NULL) {
-                            MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, top_proc, (sub_size+2)*(sub_size+2)-sub_size-1+j, 1, MPI_DOUBLE, win);
+                            MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, top_proc, (sub_size+2)*(sub_size+1)+j, 1, MPI_DOUBLE, win);
                         }
                         if(i == sub_size-1 && bottom_proc != MPI_PROC_NULL) {
-                            MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, bottom_proc, j+1, 1, MPI_DOUBLE, win);
+                            MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, bottom_proc, j, 1, MPI_DOUBLE, win);
                         }
                         if(j == 0 && left_proc != MPI_PROC_NULL) {
-                            MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, left_proc, (sub_size+2)*(i+2)-1, 1, MPI_DOUBLE, win);
+                            MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, left_proc, (sub_size+2)*(i+1)-1, 1, MPI_DOUBLE, win);
                         }
                         if(j == sub_size-1 && right_proc != MPI_PROC_NULL) {
-                            MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, right_proc, (sub_size+2)*(i+1), 1, MPI_DOUBLE, win);
+                            MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, right_proc, (sub_size+2)*(i), 1, MPI_DOUBLE, win);
                         }
                     }
                 }
@@ -208,17 +205,17 @@ int main(int argc, char* argv[]){
 
             // invasion rule
             std::vector<cell_update> updates;
-            for(int i = 0; i < sub_size; i++) {
-                for(int j = 0; j < sub_size; j++) {
+            for(int i = 1; i < sub_size+1; i++) {
+                for(int j = 1; j < sub_size+1; j++) {
                     double randval = RanGen.Random(); //random_float();
                     if(randval < invrate) {
                         inv_sum = 0;
                         inv_index = 0;
                         for(int x = -1; x <= 1; x++) {
                             for(int y = -1; y <= 1; y++) {
-                                if((x != 0 || y != 0) && (i+x >= 0 || left_proc != MPI_PROC_NULL) && (i+x < sub_size || right_proc != MPI_PROC_NULL) && (j+y >= 0 || top_proc != MPI_PROC_NULL) && (j+y < sub_size || bottom_proc != MPI_PROC_NULL)) {
-                                    neighborhood[inv_index] = land_grid[i+x][j+y];
-                                    inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
+                                if((x != 0 || y != 0) && (i+x >= 1 || left_proc != MPI_PROC_NULL) && (i+x < sub_size+1 || right_proc != MPI_PROC_NULL) && (j+y >= 1 || top_proc != MPI_PROC_NULL) && (j+y < sub_size+1 || bottom_proc != MPI_PROC_NULL)) {
+                                    neighborhood[inv_index] = land_grid(i+x,j+y);
+                                    inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid(i,j)*(1-p));
                                     inv_sum += inv[inv_index];
                                     inv_index++;
                                 }
@@ -233,7 +230,7 @@ int main(int argc, char* argv[]){
                                 weighted_rand -= inv[inv_index];
                                 inv_index++;
                             }
-                            if(neighborhood[inv_index] != land_grid[i][j]) {
+                            if(neighborhood[inv_index] != land_grid(i,j)) {
                                 //land_grid[i][j] = neighborhood[inv_index];
                                 updates.push_back({i, j, neighborhood[inv_index]});
                             }
@@ -242,18 +239,18 @@ int main(int argc, char* argv[]){
                 }
             }
             for(const auto& [i, j, val] : updates) {
-                land_grid[i][j] = val;
+                land_grid(i,j) = val;
                 if(i == 0 && top_proc != MPI_PROC_NULL) {
-                    MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, top_proc, (sub_size+2)*(sub_size+2)-sub_size-1+j, 1, MPI_DOUBLE, win);
+                    MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, top_proc, (sub_size+2)*(sub_size+1)+j, 1, MPI_DOUBLE, win);
                 }
                 if(i == sub_size-1 && bottom_proc != MPI_PROC_NULL) {
-                    MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, bottom_proc, j+1, 1, MPI_DOUBLE, win);
+                    MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, bottom_proc, j, 1, MPI_DOUBLE, win);
                 }
                 if(j == 0 && left_proc != MPI_PROC_NULL) {
-                    MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, left_proc, (sub_size+2)*(i+2)-1, 1, MPI_DOUBLE, win);
+                    MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, left_proc, (sub_size+2)*(i+1)-1, 1, MPI_DOUBLE, win);
                 }
                 if(j == sub_size-1 && right_proc != MPI_PROC_NULL) {
-                    MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, right_proc, (sub_size+2)*(i+1), 1, MPI_DOUBLE, win);
+                    MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, right_proc, (sub_size+2)*(i), 1, MPI_DOUBLE, win);
                 }
             }
 
@@ -263,25 +260,25 @@ int main(int argc, char* argv[]){
             // normalize the simulated result so that the fittest species will not have a very high effective population so that it always outcompetes other species
             if(step%nsteps == 0) {
                 // Calculate a global average. This is not precise because it double-counts the boundaries, but it's a rough estimate for normalization
-                cell_type sum = std::accumulate(land_grid_data.begin(), land_grid_data.end(), 0.0);
-                cell_type local_average = sum / land_grid_data.size();
+                cell_type sum = std::accumulate(land_grid.begin1(), land_grid.end1(), 0.0);
+                cell_type local_average = sum / (land_grid.size1()*land_grid.size2());
                 cell_type global_average = 0;
                 MPI_Allreduce(&local_average, &global_average, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
                 global_average /= nprocs;
 
                 // Normalize based on the global average
-                std::transform(land_grid_data.begin(), land_grid_data.end(), land_grid_data.begin(), [global_average](double v) { return v / global_average; });
+                std::transform(land_grid.begin1(), land_grid.end1(), land_grid.begin1(), [global_average](double v) { return v / global_average; });
             }
 
         }
 
         // Normalize and save mean
-        cell_type sum = std::accumulate(land_grid_data.begin(), land_grid_data.end(), 0.0);
-        cell_type local_average = sum / land_grid_data.size();
+        cell_type sum = std::accumulate(land_grid.begin1(), land_grid.end1(), 0.0);
+        cell_type local_average = sum / (land_grid.size1()*land_grid.size2());
         cell_type global_average = 0;
         MPI_Allreduce(&local_average, &global_average, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         global_average /= nprocs;
-        std::transform(land_grid_data.begin(), land_grid_data.end(), land_grid_data.begin(), [global_average](cell_type v) { return v / global_average; });
+        std::transform(land_grid.begin1(), land_grid.end1(), land_grid.begin1(), [global_average](cell_type v) { return v / global_average; });
 
         rep_end_time = std::chrono::system_clock::now();
         std::chrono::duration<double> rep_time = rep_end_time - rep_start_time;
@@ -298,12 +295,12 @@ int main(int argc, char* argv[]){
         FILE *fp;
         fp = fopen(outfile.c_str(), "w");
         print("Writing to file %s\n", outfile.c_str());
-        for(int i = 0; i < sub_size; i++) {
-            for(int j = 0; j < sub_size-1; j++) {
-                fprintf(fp, "%f", land_grid[i][j]);
+        for(int i = 1; i < sub_size+1; i++) {
+            for(int j = 1; j < sub_size; j++) {
+                fprintf(fp, "%f", land_grid(i,j));
                 fprintf(fp, ", ");
             }
-            fprintf(fp, "%f\n", land_grid[i][sub_size-1]);
+            fprintf(fp, "%f\n", land_grid(i,sub_size));
         }
         fflush(fp);
         fclose(fp);
