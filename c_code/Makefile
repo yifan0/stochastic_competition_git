@@ -1,6 +1,6 @@
 CC=g++
 MPICC=mpic++
-CFLAGS=-I. -std=c++11 -O3
+CFLAGS=-I. -std=c++17 -O3
 
 BLAS_INC = /usr/local/src/openblas/0.3.12/gcc/Sandy.Bridge/include
 BLAS_LIB = /usr/local/src/openblas/0.3.12/gcc/Sandy.Bridge/lib

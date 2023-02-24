@@ -26,44 +26,8 @@ using namespace std;
     nreps : number of repetitions of the simulation\n\
     outfile : output file name\n"
 
-enum DIRECTION { NW=0, N=1, NE=2, W=10, HERE=11, E=12, SW=20, S=21, SE=22 };
-
 typedef double cell_type;
-
-int ns_dir(DIRECTION dir) {
-    if (dir % 3 == 0) return -1;
-    if (dir % 3 == 1) return 0;
-    if (dir % 3 == 2) return 1;
-}
-
-int ew_dir(DIRECTION dir) {
-    if (dir % 3 == 0) return -1;
-    if (dir % 3 == 10) return 0;
-    if (dir % 3 == 20) return 1;
-}
-
-struct cellUpdateRecord {
-    int x;
-    int y;
-    cell_type val;
-};
-
-cellUpdateRecord newCellUpdateRecord(int x, int y, cell_type val) {
-    cellUpdateRecord rec;
-    rec.x = x;
-    rec.y = y;
-    rec.val = val;
-    return rec;
-}
-
-constexpr int FLOAT_MIN = 0;
-constexpr int FLOAT_MAX = 1;
-float random_float(float max=1.0) {
-    // returns a random value between 0 and 1
-    return (FLOAT_MIN + (float)(rand()) / ((float)(RAND_MAX/(FLOAT_MAX - FLOAT_MIN))))*max;
-}
-
-
+typedef std::tuple<int, int, cell_type> cell_update;
 
 int main(int argc, char* argv[]){
     int nrep = 10;
@@ -79,13 +43,22 @@ int main(int argc, char* argv[]){
     std::chrono::time_point<std::chrono::system_clock> start_time, end_time, rep_start_time, rep_end_time, out_start_time, out_end_time;
 
     bool badargs = false;
-    if(argc < 3 || argc > 4) badargs = true;
-    if (argc < 2 || sscanf(argv[1],"%ld",&size) != 1 || size < 1)
-        badargs = true;
-    if (argc < 3 || sscanf(argv[2],"%ld",&nrep) != 1 || nrep < 1)
-        badargs = true;
-    if(argc > 3)
-       outfile = argv[3];
+    if(argc < 1 || argc > 4) badargs = true;
+    if(argc > 1) {
+        size = stoi(argv[1]);
+        if(size < 1) {
+            badargs = true;
+        }
+    }
+    if(argc > 2) {
+        nrep = stoi(argv[2]);
+        if(nrep < 1) {
+            badargs = true;
+        }
+    }
+    if(argc > 3) {
+        outfile = argv[3];
+    }
     timescale = 100*(size*1.0/p);
     endtime = timescale/nsteps;
 
@@ -105,15 +78,15 @@ int main(int argc, char* argv[]){
     cell_type** mean_grid = mean_grid_arrays.data();
 
     println("Inputs:")
-    println("\trepetitions = %d", nrep)
-    println("\tsize = %d%s%d", size, "x", size)
-    println("\tindividuals per patch = %f", 1/p)
-    println("\tmutation size = %f", mutsize)
-    println("\tspeciation rate = %f", specrate)
-    println("\tinvasion rate = %f", invrate)
-    println("\ttimescale = %d", timescale)
-    println("\tnsteps = %d", nsteps)
-    println("\tend time = %d", endtime);
+        println("\trepetitions = %d", nrep)
+        println("\tsize = %d%s%d", size, "x", size)
+        println("\tindividuals per patch = %f", 1/p)
+        println("\tmutation size = %f", mutsize)
+        println("\tspeciation rate = %f", specrate)
+        println("\tinvasion rate = %f", invrate)
+        println("\ttimescale = %d", timescale)
+        println("\tnsteps = %d", nsteps)
+        println("\tend time = %d", endtime);
     println("");
     fflush(stdout);
 
@@ -145,9 +118,9 @@ int main(int argc, char* argv[]){
         cell_type inv[8];
         cell_type inv_sum = 0;
         int inv_index = 0;
-       
+
         for(int step = 0; step < timescale; step++) {
-            
+
             // speciation rule
             int speciation_event_count = speciation_distribution(generator);
             std::set<int> spec_events;
@@ -168,9 +141,9 @@ int main(int argc, char* argv[]){
                     }
                 }
             }
-           
+
             // invasion rule
-            std::map<int, cell_type> invasion_event_archive;
+            std::vector<cell_update> updates;
             for(int i = 0; i < size; i++) {
                 for(int j = 0; j < size; j++) {
                     double randval = RanGen.Random(); //random_float();
@@ -180,10 +153,8 @@ int main(int argc, char* argv[]){
                         for(int x = -1; x < 1; x++) {
                             for(int y = -1; y <= 1; y++) {
                                 if((x != 0 || y != 0) && i+x >= 0 && i+x < size && j+y >= 0 && j+y < size) {
-                                    if(invasion_event_archive.find( (i+x)*size+j+y ) != invasion_event_archive.end() )
-                                        neighborhood[inv_index] = invasion_event_archive[(i+x)*size+j+y];
-                                    else
-                                        neighborhood[inv_index] = land_grid[i+x][j+y];
+
+                                    neighborhood[inv_index] = land_grid[i+x][j+y];
                                     inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
                                     inv_sum += inv[inv_index];
                                     inv_index++;
@@ -200,12 +171,16 @@ int main(int argc, char* argv[]){
                                 inv_index++;
                             }
                             if(neighborhood[inv_index] != land_grid[i][j]) {
-                                land_grid[i][j] = neighborhood[inv_index];
-                                invasion_event_archive[i*size + j] = neighborhood[inv_index];
+                                //land_grid[i][j] = neighborhood[inv_index];
+                                updates.push_back({i, j, neighborhood[inv_index]});
                             }
                         }
                     }
                 }
+            }
+
+            for(const auto& [i, j, val] : updates) {
+                land_grid[i][j] = val;
             }
 
             // renormalize every nstep steps
