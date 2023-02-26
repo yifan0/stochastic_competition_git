@@ -9,7 +9,7 @@ BOOST_INC := /usr/local/boost/1.71.0/include
 
 LD_FLAGS = $(GASNET_BACKEND_LIB_FLAGS)
 
-all: mpi_sim
+all: mpi_sim simple
 
 sim: sim.cpp
 	$(CC) $(CFLAGS) -o sim sim.cpp

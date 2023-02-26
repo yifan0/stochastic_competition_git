@@ -70,12 +70,11 @@ int main(int argc, char* argv[]){
     start_time = std::chrono::system_clock::now();
 
     // grid for average across reps
-    std::vector<cell_type> mean_grid_data(size*size, 0); // fill grid with 0s
-    std::vector<cell_type*> mean_grid_arrays;
-    for(int i = 0; i != size*size; i += size) {
-        mean_grid_arrays.push_back(mean_grid_data.data() + i);
+    cell_type land_grid_data[size*size];
+    cell_type* land_grid[size];
+    for(size_t i = 0; i < size; i++) {
+        land_grid[i] = land_grid_data + i*size;
     }
-    cell_type** mean_grid = mean_grid_arrays.data();
 
     println("Inputs:")
         println("\trepetitions = %d", nrep)
@@ -98,14 +97,6 @@ int main(int argc, char* argv[]){
 
     for(int rep = 0; rep < nrep; rep++) {
         rep_start_time = std::chrono::system_clock::now();
-        // grid for land data
-        // strategy from: https://stackoverflow.com/questions/46354262/how-to-dynamically-allocate-a-contiguous-2d-array-in-c
-        std::vector<cell_type> land_grid_data(size*size);
-        std::vector<cell_type*> land_grid_arrays;
-        for(int i = 0; i != size*size; i += size) {
-            land_grid_arrays.push_back(land_grid_data.data() + i);
-        }
-        cell_type** land_grid = land_grid_arrays.data();
 
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size; j++) {
@@ -197,52 +188,35 @@ int main(int argc, char* argv[]){
                 for(int i = 0; i < size; i++) {
                     for(int j = 0; j < size; j++) {
                         land_grid[i][j] /= land_grid_mean; // normalize grid
-                        mean_grid[i][j] += land_grid[i][j]/nrep; // add contribution to average across reps
                     }
                 }
             }
 
         }
 
-        // normalize the simulated result so that the fittest species will not have a very high effective population so that it always outcompetes other species
-        float land_grid_mean = 0;
-        float tmp_sum = 0;
-        for(int i = 0; i < size; i++) {
-            for(int j = 0; j < size; j++) {
-                tmp_sum += land_grid[i][j];
-            }
-            land_grid_mean += tmp_sum/(size*size);
-            tmp_sum = 0;
-        }
-        println("Grid mean = %f for rep %d", land_grid_mean, rep);
-        fflush(stdout);
-        for(int i = 0; i < size; i++) {
-            for(int j = 0; j < size; j++) {
-                land_grid[i][j] /= land_grid_mean; // normalize grid
-                mean_grid[i][j] += land_grid[i][j]/nrep; // add contribution to average across reps
-            }
-        }
         rep_end_time = std::chrono::system_clock::now();
         std::chrono::duration<double> rep_time = rep_end_time - rep_start_time;
         println("Rep %d run time = %fs", rep, rep_time.count());
         fflush(stdout);
+
+        out_start_time = std::chrono::system_clock::now();
+        FILE *fp;
+        outfile = argv[3] + std::to_string(rep) + ".log";
+        fp = fopen(outfile.c_str(), "w");
+        for(int i = 0; i < size; i++) {
+            for(int j = 0; j < size-1; j++) {
+                fprintf(fp, "%f", land_grid[i][j]);
+                fprintf(fp, ", ");
+            }
+            fprintf(fp, "%f\n", land_grid[i][size-1]);
+        }
+        fclose(fp);
+        out_end_time = std::chrono::system_clock::now();
+        std::chrono::duration<double> out_time = out_end_time - out_start_time;
+        println("Output run time = %fs", out_time.count());
+
     }
 
-    out_start_time = std::chrono::system_clock::now();
-    FILE *fp;
-    fp = fopen(outfile.c_str(), "w");
-    for(int i = 0; i < size; i++) {
-        for(int j = 0; j < size-1; j++) {
-            fprintf(fp, "%f", mean_grid[i][j]);
-            fprintf(fp, ", ");
-        }
-        fprintf(fp, "%f\n", mean_grid[i][size-1]);
-    }
-    fclose(fp);
-    out_end_time = std::chrono::system_clock::now();
-    std::chrono::duration<double> out_time = out_end_time - out_start_time;
-    println("Output run time = %fs", out_time.count());
-    fflush(stdout);
     end_time = std::chrono::system_clock::now();
     std::chrono::duration<double> total_time = end_time - start_time;
     println("Total run time = %fs", total_time.count());
