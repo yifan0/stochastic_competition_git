@@ -72,8 +72,11 @@ int main(int argc, char* argv[]){
     // grid for average across reps
     cell_type land_grid_data[size*size];
     cell_type* land_grid[size];
+    bool land_mask_data[size*size];
+    bool* land_mask[size];
     for(size_t i = 0; i < size; i++) {
         land_grid[i] = land_grid_data + i*size;
+        land_mask[i] = land_mask_data + i*size;
     }
 
     println("Inputs:")
@@ -101,6 +104,7 @@ int main(int argc, char* argv[]){
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size; j++) {
                 land_grid[i][j] = 1;
+                land_mask[i][j] = 0;
             }
         }
 
@@ -129,6 +133,14 @@ int main(int argc, char* argv[]){
                     float probsuccess = p*ratio/(p*(ratio-1)+1);
                     if(RanGen.Random() <= probsuccess) {
                         land_grid[i][j] *= ratio;
+                        land_mask[i][j] = true;
+                        for(int x = -1; x < 1; x++) {
+                            for(int y = -1; y <= 1; y++) {
+                                if((x != 0 || y != 0) && i+x >= 0 && i+x < size && j+y >= 0 && j+y < size) {
+                                    land_mask[i+x][j+y] = true;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -137,33 +149,35 @@ int main(int argc, char* argv[]){
             std::vector<cell_update> updates;
             for(int i = 0; i < size; i++) {
                 for(int j = 0; j < size; j++) {
-                    double randval = RanGen.Random(); //random_float();
-                    if(randval < invrate) {
-                        inv_sum = 0;
-                        inv_index = 0;
-                        for(int x = -1; x < 1; x++) {
-                            for(int y = -1; y <= 1; y++) {
-                                if((x != 0 || y != 0) && i+x >= 0 && i+x < size && j+y >= 0 && j+y < size) {
+                    if(land_mask[i][j]) {
+                        double randval = RanGen.Random(); //random_float();
+                        if(randval < invrate) {
+                            inv_sum = 0;
+                            inv_index = 0;
+                            for(int x = -1; x < 1; x++) {
+                                for(int y = -1; y <= 1; y++) {
+                                    if((x != 0 || y != 0) && i+x >= 0 && i+x < size && j+y >= 0 && j+y < size) {
 
-                                    neighborhood[inv_index] = land_grid[i+x][j+y];
-                                    inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
-                                    inv_sum += inv[inv_index];
-                                    inv_index++;
+                                        neighborhood[inv_index] = land_grid[i+x][j+y];
+                                        inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
+                                        inv_sum += inv[inv_index];
+                                        inv_index++;
+                                    }
                                 }
                             }
-                        }
 
-                        if(randval <= inv_sum/8) {
-                            // Get random element with weighted probabilities
-                            double weighted_rand = RanGen.Random()*inv_sum;
-                            inv_index = 0;
-                            while(weighted_rand > inv[inv_index]) {
-                                weighted_rand -= inv[inv_index];
-                                inv_index++;
-                            }
-                            if(neighborhood[inv_index] != land_grid[i][j]) {
-                                //land_grid[i][j] = neighborhood[inv_index];
-                                updates.push_back({i, j, neighborhood[inv_index]});
+                            if(randval <= inv_sum/8) {
+                                // Get random element with weighted probabilities
+                                double weighted_rand = RanGen.Random()*inv_sum;
+                                inv_index = 0;
+                                while(weighted_rand > inv[inv_index]) {
+                                    weighted_rand -= inv[inv_index];
+                                    inv_index++;
+                                }
+                                if(neighborhood[inv_index] != land_grid[i][j]) {
+                                    //land_grid[i][j] = neighborhood[inv_index];
+                                    updates.push_back({i, j, neighborhood[inv_index]});
+                                }
                             }
                         }
                     }
@@ -172,6 +186,26 @@ int main(int argc, char* argv[]){
 
             for(const auto& [i, j, val] : updates) {
                 land_grid[i][j] = val;
+                bool unmask = true;
+                for(int x = -1; x < 1; x++) {
+                    for(int y = -1; y <= 1; y++) {
+                        if((x != 0 || y != 0) && i+x >= 0 && i+x < size && j+y >= 0 && j+y < size) {
+                            bool unmask = true;
+                            for(int xx = -1; xx < 1; xx++) {
+                                for(int yy = -1; yy <= 1; yy++) {
+                                    if((xx != 0 || yy != 0) && i+x+xx >= 0 && i+x+xx < size && j+y+yy >= 0 && j+y+yy < size) {
+                                        if(land_grid[i+x+xx][j+y+yy] != val) {
+                                            unmask = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if(unmask) break;
+                            }
+                            land_mask[i+x][j+y] = !unmask;
+                        }
+                    }
+                }
             }
 
             // renormalize every nstep steps
