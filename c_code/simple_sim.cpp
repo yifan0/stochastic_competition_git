@@ -200,7 +200,7 @@ int main(int argc, char* argv[]){
                                         }
                                     }
                                 }
-                                if(unmask) break;
+                                if(!unmask) break;
                             }
                             land_mask[i+x][j+y] = !unmask;
                         }
