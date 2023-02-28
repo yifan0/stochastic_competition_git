@@ -27,7 +27,6 @@ using namespace std;
     outfile : output file name\n"
 
 typedef double cell_type;
-typedef std::tuple<int, int, cell_type> cell_update;
 
 struct speciation_tree_node {
     cell_type val;
@@ -38,6 +37,8 @@ struct speciation_tree_node {
     speciation_tree_node(cell_type v, size_t t, size_t x, size_t y) : val(v), time(t), i(x), j(y) {
     }
 };
+
+typedef std::tuple<int, int, speciation_tree_node*> cell_update;
 
 speciation_tree_node* find_node(speciation_tree_node* root, cell_type target) {
     if(root->val == target) {
@@ -129,8 +130,8 @@ int main(int argc, char* argv[]){
     start_time = std::chrono::system_clock::now();
 
     // grid for average across reps
-    vector<cell_type> land_grid_data(size*size);
-    vector<cell_type*> land_grid(size);
+    vector<speciation_tree_node*> land_grid_data(size*size);
+    vector<speciation_tree_node**> land_grid(size);
     //cell_type land_grid_data[size*size];
     //cell_type* land_grid[size];
     bool land_mask_data[size*size];
@@ -162,18 +163,18 @@ int main(int argc, char* argv[]){
     for(int rep = 0; rep < nrep; rep++) {
         rep_start_time = std::chrono::system_clock::now();
 
+        // speciation rule variables
+        speciation_tree_node* speciation_root = new speciation_tree_node(1, 0, 0, 0); // root has value 1, the starting value
+
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size; j++) {
-                land_grid[i][j] = 1;
+                land_grid[i][j] = speciation_root;
                 land_mask[i][j] = 0;
             }
         }
 
-        // speciation rule variables
-        speciation_tree_node* speciation_root = new speciation_tree_node(land_grid[0][0], 0, 0, 0); // root has value 1, the starting value
-
         // invasion rule variables
-        cell_type neighborhood[8];
+        speciation_tree_node* neighborhood[8];
         cell_type inv[8];
         cell_type inv_sum = 0;
         int inv_index = 0;
@@ -195,11 +196,10 @@ int main(int argc, char* argv[]){
                     }
                     float probsuccess = p*ratio/(p*(ratio-1)+1);
                     if(RanGen.Random() <= probsuccess) {
-                        cell_type parent = land_grid[i][j];
-                        // find the parent node
-                        speciation_tree_node* node = find_node(speciation_root, parent);
-                        land_grid[i][j] = parent*ratio;
-                        node->children.push_back(new speciation_tree_node(land_grid[i][j], step, i, j));
+                        speciation_tree_node* parent = land_grid[i][j];
+
+                        land_grid[i][j] = new speciation_tree_node(parent->val*ratio, step, i, j);
+                        parent->children.push_back(land_grid[i][j]);
                         land_mask[i][j] = true;
                         for(int x = -1; x < 1; x++) {
                             for(int y = -1; y <= 1; y++) {
@@ -227,7 +227,7 @@ int main(int argc, char* argv[]){
                                     if((x != 0 || y != 0) && i+x >= 0 && i+x < size && j+y >= 0 && j+y < size) {
 
                                         neighborhood[inv_index] = land_grid[i+x][j+y];
-                                        inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
+                                        inv[inv_index] = p*neighborhood[inv_index]->val/(p*neighborhood[inv_index]->val+land_grid[i][j]->val*(1-p));
                                         inv_sum += inv[inv_index];
                                         inv_index++;
                                     }
@@ -259,6 +259,7 @@ int main(int argc, char* argv[]){
                     for(int y = -1; y <= 1; y++) {
                         if((x != 0 || y != 0) && i+x >= 0 && i+x < size && j+y >= 0 && j+y < size) {
                             bool unmask = true;
+                            if(land_grid[i+x][j+x] != val) { unmask = false; }
                             for(int xx = -1; xx < 1; xx++) {
                                 for(int yy = -1; yy <= 1; yy++) {
                                     if((xx != 0 || yy != 0) && i+x+xx >= 0 && i+x+xx < size && j+y+yy >= 0 && j+y+yy < size) {
@@ -288,10 +289,10 @@ int main(int argc, char* argv[]){
         fp = fopen(outfile.c_str(), "w");
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size-1; j++) {
-                fprintf(fp, "%f", land_grid[i][j]);
+                fprintf(fp, "%f", land_grid[i][j]->val);
                 fprintf(fp, ", ");
             }
-            fprintf(fp, "%f\n", land_grid[i][size-1]);
+            fprintf(fp, "%f\n", land_grid[i][size-1]->val);
         }
         fclose(fp);
 
