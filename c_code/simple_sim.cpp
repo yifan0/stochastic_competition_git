@@ -29,6 +29,64 @@ using namespace std;
 typedef double cell_type;
 typedef std::tuple<int, int, cell_type> cell_update;
 
+struct speciation_tree_node {
+    cell_type val;
+    size_t i;
+    size_t j;
+    size_t time;
+    vector<speciation_tree_node*> children;
+    speciation_tree_node(cell_type v, size_t t, size_t x, size_t y) : val(v), time(t), i(x), j(y) {
+    }
+};
+
+speciation_tree_node* find_node(speciation_tree_node* root, cell_type target) {
+    if(root->val == target) {
+        return root;
+    }
+
+    for(auto child : root->children) {
+        speciation_tree_node* result = find_node(child, target);
+        if(result != nullptr) return result;
+    }
+
+    return nullptr;
+}
+
+// caller is responsible for adding a semicolon at the end
+string toString(speciation_tree_node* root) {
+    // for a leaf, just return the label
+    if(root->children.size() == 0) {
+        return std::to_string(root->val);
+    }
+
+    // for a parent, group the children in () and add label
+    string output = "(";
+    for(int i = 0; i < root->children.size(); i++) {
+        output += toString(root->children[i]);
+        if(i < root->children.size()-1) output += ",";
+    }
+    output += ")";
+    output += std::to_string(root->val);
+    return output;
+}
+
+void delete_tree(speciation_tree_node* root) {
+    if(root == nullptr) return;
+    for(auto child : root->children) {
+        delete_tree(child);
+    }
+    delete root;
+}
+
+size_t get_depth(speciation_tree_node* root) {
+    if(root == nullptr) return 0;
+    size_t depth = 0;
+    for(auto child : root->children) {
+        depth = max(depth, get_depth(child));
+    }
+    return depth+1;
+}
+
 int main(int argc, char* argv[]){
     int nrep = 10;
     int size = 100;
@@ -36,6 +94,7 @@ int main(int argc, char* argv[]){
     double mutsize = 0.1;
     double specrate = 0.0001; // 1.0e-4
     double invrate = 0.2;
+    invrate = 0;
     int timescale = 100*size/p;
     int nsteps = 100;
     int endtime = timescale/nsteps;
@@ -70,13 +129,15 @@ int main(int argc, char* argv[]){
     start_time = std::chrono::system_clock::now();
 
     // grid for average across reps
-    cell_type land_grid_data[size*size];
-    cell_type* land_grid[size];
+    vector<cell_type> land_grid_data(size*size);
+    vector<cell_type*> land_grid(size);
+    //cell_type land_grid_data[size*size];
+    //cell_type* land_grid[size];
     bool land_mask_data[size*size];
     bool* land_mask[size];
     for(size_t i = 0; i < size; i++) {
-        land_grid[i] = land_grid_data + i*size;
-        land_mask[i] = land_mask_data + i*size;
+        land_grid[i] = &land_grid_data[i*size];
+        land_mask[i] = &land_mask_data[i*size];
     }
 
     println("Inputs:")
@@ -108,6 +169,9 @@ int main(int argc, char* argv[]){
             }
         }
 
+        // speciation rule variables
+        speciation_tree_node* speciation_root = new speciation_tree_node(land_grid[0][0], 0, 0, 0); // root has value 1, the starting value
+
         // invasion rule variables
         cell_type neighborhood[8];
         cell_type inv[8];
@@ -120,19 +184,22 @@ int main(int argc, char* argv[]){
             int speciation_event_count = speciation_distribution(generator);
             std::set<int> spec_events;
             while(spec_events.size() < speciation_event_count) {
-                int index = rand() % (size*size);
+                int index = RanGen.IRandom(0,size*size-1);
                 if(!spec_events.count(index)) {
                     int i = index % size;
                     int j = index / size;
                     spec_events.insert(index);
-                    int down = rand() % 2;
-                    float ratio = (1+RanGen.Random()*mutsize);
-                    if(down) {
+                    double ratio = 1+RanGen.Random()*mutsize;
+                    if(RanGen.IRandom(0,1)) {
                         ratio = 1/ratio;
                     }
                     float probsuccess = p*ratio/(p*(ratio-1)+1);
                     if(RanGen.Random() <= probsuccess) {
-                        land_grid[i][j] *= ratio;
+                        cell_type parent = land_grid[i][j];
+                        // find the parent node
+                        speciation_tree_node* node = find_node(speciation_root, parent);
+                        land_grid[i][j] = parent*ratio;
+                        node->children.push_back(new speciation_tree_node(land_grid[i][j], step, i, j));
                         land_mask[i][j] = true;
                         for(int x = -1; x < 1; x++) {
                             for(int y = -1; y <= 1; y++) {
@@ -141,6 +208,7 @@ int main(int argc, char* argv[]){
                                 }
                             }
                         }
+
                     }
                 }
             }
@@ -207,25 +275,6 @@ int main(int argc, char* argv[]){
                     }
                 }
             }
-
-            // renormalize every nstep steps
-            if(step%nsteps == 0) {
-                float land_grid_mean = 0;
-                float tmp_sum = 0;
-                for(int i = 0; i < size; i++) {
-                    for(int j = 0; j < size; j++) {
-                        tmp_sum += land_grid[i][j];
-                    }
-                    land_grid_mean += tmp_sum/(size*size);
-                    tmp_sum = 0;
-                }
-                for(int i = 0; i < size; i++) {
-                    for(int j = 0; j < size; j++) {
-                        land_grid[i][j] /= land_grid_mean; // normalize grid
-                    }
-                }
-            }
-
         }
 
         rep_end_time = std::chrono::system_clock::now();
@@ -245,6 +294,15 @@ int main(int argc, char* argv[]){
             fprintf(fp, "%f\n", land_grid[i][size-1]);
         }
         fclose(fp);
+
+        outfile = argv[3] + std::to_string(rep) + ".tree";
+        fp = fopen(outfile.c_str(), "w");
+        string output_tree = toString(speciation_root);
+        fprintf(fp, "%s;", output_tree.c_str());
+        println("Depth of tree = %d", get_depth(speciation_root));
+        fclose(fp);
+        delete_tree(speciation_root);
+
         out_end_time = std::chrono::system_clock::now();
         std::chrono::duration<double> out_time = out_end_time - out_start_time;
         println("Output run time = %fs", out_time.count());
