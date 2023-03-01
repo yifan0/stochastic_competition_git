@@ -9,6 +9,7 @@
 #include <map>
 #include <numeric>
 #include <algorithm>
+#include <numeric>
 #include "sfmt.h"
 #include "sfmt.cpp"
 #include "userintf.cpp"
@@ -277,6 +278,65 @@ int main(int argc, char* argv[]){
                 }
             }
         }
+
+        // Calculate summary statistics
+
+        // Count unique values
+        vector<size_t> unique_counts;
+        vector<cell_type> deltas;
+        size_t subsize = 2*2*2*2;
+        for(size_t i = 0; i < size-subsize; i++) {
+            for(size_t j = 0; j < size-subsize; j++) {
+                //set<speciation_tree_node*> unique_values;
+                set<cell_type> unique_values;
+                for(size_t x = 0; x < subsize; x++) {
+                    for(size_t y = 0; y < subsize; y++) {
+                        unique_values.insert(land_grid[x+i][y+j]->val);
+                        //unique_values.insert(land_grid[x+i][y+j]);
+                    }
+                }
+                unique_counts.push_back(unique_values.size());
+                cell_type min = *unique_values.begin();
+                cell_type max = *unique_values.rbegin();
+                deltas.push_back(max-min);
+                //deltas.push_back(*unique_values.rbegin() - *unique_values.begin());
+            }
+        }
+        // summarize unique_counts
+        double average_unique_count = 0;
+        for(size_t count : unique_counts) {
+            average_unique_count += count;
+        }
+        average_unique_count /= unique_counts.size();
+        println("Average unique counts for rep %d = %f", rep, average_unique_count);
+
+        // summarize deltas
+        cell_type average_delta = 0;
+        for(cell_type d : deltas) {
+            average_delta += d;
+        }
+        average_delta /= deltas.size();
+        println("Average delta for rep %d = %f", rep, average_delta);
+
+        // Average for sections
+        vector<cell_type> section_averages;
+        for(size_t i = 0; i < size-subsize; i++) {
+            for(size_t j = 0; j < size-subsize; j++) {
+                cell_type sum = 0;
+                for(size_t x = 0; x < subsize; x++) {
+                    for(size_t y = 0; y < subsize; y++) {
+                        sum += land_grid[x+i][y+j]->val;
+                    }
+                }
+                section_averages.push_back((sum / (subsize*subsize)));
+            }
+        }
+        double average_section = 0;
+        for(double a : section_averages) {
+            average_section += a;
+        }
+        average_section /= section_averages.size();
+        println("Average of section averages for rep %d = %f", rep, average_section);
 
         rep_end_time = std::chrono::system_clock::now();
         std::chrono::duration<double> rep_time = rep_end_time - rep_start_time;
