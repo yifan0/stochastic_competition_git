@@ -157,7 +157,11 @@ int main(int argc, char* argv[]){
         rep_start_time = std::chrono::system_clock::now();
 
         // set all of land_grid_data to 1
-        std::fill(land_grid.begin1(), land_grid.end1(), 1);
+        for(size_t i = 0; i < sub_size+2; i++) {
+            for(size_t j = 0; j < sub_size+2; j++) {
+                land_grid(i,j) = 1;
+            }
+        }
 
         // invasion rule variables
         cell_type neighborhood[8];
@@ -253,32 +257,55 @@ int main(int argc, char* argv[]){
                     MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, right_proc, (sub_size+2)*(i), 1, MPI_DOUBLE, win);
                 }
             }
-
+            
             //MPI_Win_fence(0, win);
 
             // renormalize every nstep steps
             // normalize the simulated result so that the fittest species will not have a very high effective population so that it always outcompetes other species
             if(step%nsteps == 0) {
                 // Calculate a global average. This is not precise because it double-counts the boundaries, but it's a rough estimate for normalization
-                cell_type sum = std::accumulate(land_grid.begin1(), land_grid.end1(), 0.0);
-                cell_type local_average = sum / (land_grid.size1()*land_grid.size2());
+                cell_type local_average = 0;
+                for(size_t i = 1; i < sub_size+1; i++) {
+                    cell_type row_sum = 0;
+                    for(size_t j = 1; j < sub_size+1; j++) {
+                        row_sum += land_grid(i,j);
+                    }
+                    local_average += row_sum/(sub_size*sub_size);
+                }
+                //cell_type sum = std::accumulate(land_grid.begin1(), land_grid.end1(), 0.0);
+                //cell_type local_average = sum / (land_grid.size1()*land_grid.size2());
                 cell_type global_average = 0;
                 MPI_Allreduce(&local_average, &global_average, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
                 global_average /= nprocs;
 
                 // Normalize based on the global average
-                std::transform(land_grid.begin1(), land_grid.end1(), land_grid.begin1(), [global_average](double v) { return v / global_average; });
+                for(size_t i = 0; i < sub_size+2; i++) {
+                    for(size_t j = 0; j < sub_size+2; j++) {
+                        land_grid(i,j) /= global_average;
+                    }
+                }
+                //std::transform(land_grid.begin1(), land_grid.end1(), land_grid.begin1(), [global_average](double v) { return v / global_average; });
             }
 
         }
 
-        // Normalize and save mean
-        cell_type sum = std::accumulate(land_grid.begin1(), land_grid.end1(), 0.0);
-        cell_type local_average = sum / (land_grid.size1()*land_grid.size2());
+        // Normalize
+        cell_type local_average = 0;
+        for(size_t i = 1; i < sub_size+1; i++) {
+            cell_type row_sum = 0;
+            for(size_t j = 1; j < sub_size+1; j++) {
+                row_sum += land_grid(i,j);
+            }
+            local_average += row_sum/(sub_size*sub_size);
+        }
         cell_type global_average = 0;
         MPI_Allreduce(&local_average, &global_average, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         global_average /= nprocs;
-        std::transform(land_grid.begin1(), land_grid.end1(), land_grid.begin1(), [global_average](cell_type v) { return v / global_average; });
+        for(size_t i = 0; i < sub_size+2; i++) {
+            for(size_t j = 0; j < sub_size+2; j++) {
+                land_grid(i,j) /= global_average;
+            }
+        }
 
         rep_end_time = std::chrono::system_clock::now();
         std::chrono::duration<double> rep_time = rep_end_time - rep_start_time;
