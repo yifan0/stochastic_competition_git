@@ -5,7 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --output=simple_%j.log   # Standard output and error log
-#SBATCH --partition cs
+#SBATCH --partition secondary
 
-/usr/bin/time -v /home/ekoning2/stochastic_competition_git/c_code/simple 256 1 test11.txt
+/usr/bin/time -v /home/ekoning2/stochastic_competition_git/c_code/simple 1024 1 testI.txt
 

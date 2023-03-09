@@ -280,6 +280,7 @@ int main(int argc, char* argv[]){
         }
 
         // Calculate summary statistics
+        /*
         // TODO: adjust so that we're 
         for(size_t summary_size = 4; summary_size < size; summary_size << 1) {
             // Count unique values
@@ -339,6 +340,7 @@ int main(int argc, char* argv[]){
             println("Average of section averages for rep %d on size %d = %f", rep, summary_size, average_section);
 
         }
+        */
 
         rep_end_time = std::chrono::system_clock::now();
         std::chrono::duration<double> rep_time = rep_end_time - rep_start_time;
