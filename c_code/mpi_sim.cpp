@@ -101,9 +101,6 @@ int main(int argc, char* argv[]){
     println("");
     fflush(stdout);
 
-    //print("Rank %d\n", rank);
-
-
     // Calculate the size of local submatrix
     int sub_size = size / sqrt_nprocs;
     int sub_size_remainder = size % sqrt_nprocs;
@@ -128,10 +125,14 @@ int main(int argc, char* argv[]){
     std::binomial_distribution<int> speciation_distribution(sub_size*sub_size, specrate);
 
     // grid for land data
-    boost::numeric::ublas::matrix<cell_type> land_grid(sub_size+2, sub_size+2);
+    vector<cell_type*> land_grid(sub_size+2);
+    vector<cell_type> land_grid_data((sub_size+2) * (sub_size+2));
+    for(size_t i = 0; i < sub_size+2; i++) {
+        land_grid[i] = &land_grid_data[(sub_size+2)*i];
+    }
 
     MPI_Win win;
-    MPI_Win_create(&land_grid(0,0), (sub_size+2) * (sub_size+2) * sizeof(cell_type), sizeof(cell_type), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
+    MPI_Win_create(&land_grid[0][0], (sub_size+2) * (sub_size+2) * sizeof(cell_type), sizeof(cell_type), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
 
     MPI_Win_fence(0, win);
 
@@ -159,7 +160,7 @@ int main(int argc, char* argv[]){
         // set all of land_grid_data to 1
         for(size_t i = 0; i < sub_size+2; i++) {
             for(size_t j = 0; j < sub_size+2; j++) {
-                land_grid(i,j) = 1;
+                land_grid[i][j] = 1;
             }
         }
 
@@ -188,18 +189,18 @@ int main(int argc, char* argv[]){
                     float probsuccess = p*ratio/(p*(ratio-1)+1);
                     if(RanGen.Random() <= probsuccess) {
                         i++; j++; // to account for ghost cells
-                        land_grid(i,j) *= ratio;
+                        land_grid[i][j] *= ratio;
                         if(i == 0 && top_proc != MPI_PROC_NULL) {
-                            MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, top_proc, (sub_size+2)*(sub_size+1)+j, 1, MPI_DOUBLE, win);
+                            MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, top_proc, (sub_size+2)*(sub_size+1)+j, 1, MPI_DOUBLE, win);
                         }
                         if(i == sub_size-1 && bottom_proc != MPI_PROC_NULL) {
-                            MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, bottom_proc, j, 1, MPI_DOUBLE, win);
+                            MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, bottom_proc, j, 1, MPI_DOUBLE, win);
                         }
                         if(j == 0 && left_proc != MPI_PROC_NULL) {
-                            MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, left_proc, (sub_size+2)*(i+1)-1, 1, MPI_DOUBLE, win);
+                            MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, left_proc, (sub_size+2)*(i+1)-1, 1, MPI_DOUBLE, win);
                         }
                         if(j == sub_size-1 && right_proc != MPI_PROC_NULL) {
-                            MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, right_proc, (sub_size+2)*(i), 1, MPI_DOUBLE, win);
+                            MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, right_proc, (sub_size+2)*(i), 1, MPI_DOUBLE, win);
                         }
                     }
                 }
@@ -218,8 +219,8 @@ int main(int argc, char* argv[]){
                         for(int x = -1; x <= 1; x++) {
                             for(int y = -1; y <= 1; y++) {
                                 if((x != 0 || y != 0) && (i+x >= 1 || left_proc != MPI_PROC_NULL) && (i+x < sub_size+1 || right_proc != MPI_PROC_NULL) && (j+y >= 1 || top_proc != MPI_PROC_NULL) && (j+y < sub_size+1 || bottom_proc != MPI_PROC_NULL)) {
-                                    neighborhood[inv_index] = land_grid(i+x,j+y);
-                                    inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid(i,j)*(1-p));
+                                    neighborhood[inv_index] = land_grid[i+x][j+y];
+                                    inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
                                     inv_sum += inv[inv_index];
                                     inv_index++;
                                 }
@@ -234,7 +235,7 @@ int main(int argc, char* argv[]){
                                 weighted_rand -= inv[inv_index];
                                 inv_index++;
                             }
-                            if(neighborhood[inv_index] != land_grid(i,j)) {
+                            if(neighborhood[inv_index] != land_grid[i][j]) {
                                 //land_grid[i][j] = neighborhood[inv_index];
                                 updates.push_back({i, j, neighborhood[inv_index]});
                             }
@@ -243,18 +244,18 @@ int main(int argc, char* argv[]){
                 }
             }
             for(const auto& [i, j, val] : updates) {
-                land_grid(i,j) = val;
+                land_grid[i][j] = val;
                 if(i == 0 && top_proc != MPI_PROC_NULL) {
-                    MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, top_proc, (sub_size+2)*(sub_size+1)+j, 1, MPI_DOUBLE, win);
+                    MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, top_proc, (sub_size+2)*(sub_size+1)+j, 1, MPI_DOUBLE, win);
                 }
                 if(i == sub_size-1 && bottom_proc != MPI_PROC_NULL) {
-                    MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, bottom_proc, j, 1, MPI_DOUBLE, win);
+                    MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, bottom_proc, j, 1, MPI_DOUBLE, win);
                 }
                 if(j == 0 && left_proc != MPI_PROC_NULL) {
-                    MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, left_proc, (sub_size+2)*(i+1)-1, 1, MPI_DOUBLE, win);
+                    MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, left_proc, (sub_size+2)*(i+1)-1, 1, MPI_DOUBLE, win);
                 }
                 if(j == sub_size-1 && right_proc != MPI_PROC_NULL) {
-                    MPI_Put(&land_grid(i,j), 1, MPI_DOUBLE, right_proc, (sub_size+2)*(i), 1, MPI_DOUBLE, win);
+                    MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, right_proc, (sub_size+2)*(i), 1, MPI_DOUBLE, win);
                 }
             }
             
@@ -268,7 +269,7 @@ int main(int argc, char* argv[]){
                 for(size_t i = 1; i < sub_size+1; i++) {
                     cell_type row_sum = 0;
                     for(size_t j = 1; j < sub_size+1; j++) {
-                        row_sum += land_grid(i,j);
+                        row_sum += land_grid[i][j];
                     }
                     local_average += row_sum/(sub_size*sub_size);
                 }
@@ -281,7 +282,7 @@ int main(int argc, char* argv[]){
                 // Normalize based on the global average
                 for(size_t i = 0; i < sub_size+2; i++) {
                     for(size_t j = 0; j < sub_size+2; j++) {
-                        land_grid(i,j) /= global_average;
+                        land_grid[i][j] /= global_average;
                     }
                 }
                 //std::transform(land_grid.begin1(), land_grid.end1(), land_grid.begin1(), [global_average](double v) { return v / global_average; });
@@ -294,7 +295,7 @@ int main(int argc, char* argv[]){
         for(size_t i = 1; i < sub_size+1; i++) {
             cell_type row_sum = 0;
             for(size_t j = 1; j < sub_size+1; j++) {
-                row_sum += land_grid(i,j);
+                row_sum += land_grid[i][j];
             }
             local_average += row_sum/(sub_size*sub_size);
         }
@@ -303,7 +304,7 @@ int main(int argc, char* argv[]){
         global_average /= nprocs;
         for(size_t i = 0; i < sub_size+2; i++) {
             for(size_t j = 0; j < sub_size+2; j++) {
-                land_grid(i,j) /= global_average;
+                land_grid[i][j] /= global_average;
             }
         }
 
@@ -324,10 +325,10 @@ int main(int argc, char* argv[]){
         print("Writing to file %s\n", outfile.c_str());
         for(int i = 1; i < sub_size+1; i++) {
             for(int j = 1; j < sub_size; j++) {
-                fprintf(fp, "%f", land_grid(i,j));
+                fprintf(fp, "%f", land_grid[i][j]);
                 fprintf(fp, ", ");
             }
-            fprintf(fp, "%f\n", land_grid(i,sub_size));
+            fprintf(fp, "%f\n", land_grid[i][sub_size]);
         }
         fflush(fp);
         fclose(fp);
