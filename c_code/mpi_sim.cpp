@@ -13,7 +13,6 @@
 #include "sfmt.cpp"
 #include "userintf.cpp"
 #include <mpi.h>
-#include <boost/numeric/ublas/matrix.hpp>
 using namespace std;
 
 #define println(...) { if(rank == 0) { printf(__VA_ARGS__); printf("\n"); } }
@@ -127,8 +126,11 @@ int main(int argc, char* argv[]){
     // grid for land data
     vector<cell_type*> land_grid(sub_size+2);
     vector<cell_type> land_grid_data((sub_size+2) * (sub_size+2));
+    bool land_mask_data[(sub_size+2) * (sub_size+2)];
+    bool* land_mask[sub_size+2];
     for(size_t i = 0; i < sub_size+2; i++) {
         land_grid[i] = &land_grid_data[(sub_size+2)*i];
+        land_mask[i] = &land_mask_data[(sub_size+2)*i];
     }
 
     MPI_Win win;
@@ -161,6 +163,7 @@ int main(int argc, char* argv[]){
         for(size_t i = 0; i < sub_size+2; i++) {
             for(size_t j = 0; j < sub_size+2; j++) {
                 land_grid[i][j] = 1;
+                land_mask[i][j] = 0;
             }
         }
 
@@ -178,8 +181,8 @@ int main(int argc, char* argv[]){
             while(spec_events.size() < speciation_event_count) {
                 int index = rand() % (sub_size*sub_size);
                 if(!spec_events.count(index)) {
-                    int i = index % sub_size;
-                    int j = index / sub_size;
+                    int i = index % sub_size + 1;
+                    int j = index / sub_size + 1;
                     spec_events.insert(index);
                     int down = rand() % 2;
                     float ratio = (1+RanGen.Random()*mutsize);
@@ -190,6 +193,13 @@ int main(int argc, char* argv[]){
                     if(RanGen.Random() <= probsuccess) {
                         i++; j++; // to account for ghost cells
                         land_grid[i][j] *= ratio;
+                        land_mask[i][j] = true;
+                        for(int x = -1; x < 1; x++) {
+                            for(int y = -1; y <= 1; y++) {
+                                land_mask[i+x][j+y] = true;
+                                // TODO: put this to the location if we're on a boundary
+                            }
+                        }
                         if(i == 0 && top_proc != MPI_PROC_NULL) {
                             MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, top_proc, (sub_size+2)*(sub_size+1)+j, 1, MPI_DOUBLE, win);
                         }
@@ -212,32 +222,34 @@ int main(int argc, char* argv[]){
             std::vector<cell_update> updates;
             for(int i = 1; i < sub_size+1; i++) {
                 for(int j = 1; j < sub_size+1; j++) {
-                    double randval = RanGen.Random(); //random_float();
-                    if(randval < invrate) {
-                        inv_sum = 0;
-                        inv_index = 0;
-                        for(int x = -1; x <= 1; x++) {
-                            for(int y = -1; y <= 1; y++) {
-                                if((x != 0 || y != 0) && (i+x >= 1 || left_proc != MPI_PROC_NULL) && (i+x < sub_size+1 || right_proc != MPI_PROC_NULL) && (j+y >= 1 || top_proc != MPI_PROC_NULL) && (j+y < sub_size+1 || bottom_proc != MPI_PROC_NULL)) {
-                                    neighborhood[inv_index] = land_grid[i+x][j+y];
-                                    inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
-                                    inv_sum += inv[inv_index];
-                                    inv_index++;
+                    if(land_mask[i][j]) {
+                        double randval = RanGen.Random(); //random_float();
+                        if(randval < invrate) {
+                            inv_sum = 0;
+                            inv_index = 0;
+                            for(int x = -1; x <= 1; x++) {
+                                for(int y = -1; y <= 1; y++) {
+                                    if((x != 0 || y != 0) && (i+x >= 1 || left_proc != MPI_PROC_NULL) && (i+x < sub_size+1 || right_proc != MPI_PROC_NULL) && (j+y >= 1 || top_proc != MPI_PROC_NULL) && (j+y < sub_size+1 || bottom_proc != MPI_PROC_NULL)) {
+                                        neighborhood[inv_index] = land_grid[i+x][j+y];
+                                        inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
+                                        inv_sum += inv[inv_index];
+                                        inv_index++;
+                                    }
                                 }
                             }
-                        }
 
-                        if(randval <= inv_sum/8) {
-                            // Get random element with weighted probabilities
-                            double weighted_rand = RanGen.Random()*inv_sum;
-                            inv_index = 0;
-                            while(weighted_rand > inv[inv_index]) {
-                                weighted_rand -= inv[inv_index];
-                                inv_index++;
-                            }
-                            if(neighborhood[inv_index] != land_grid[i][j]) {
-                                //land_grid[i][j] = neighborhood[inv_index];
-                                updates.push_back({i, j, neighborhood[inv_index]});
+                            if(randval <= inv_sum/8) {
+                                // Get random element with weighted probabilities
+                                double weighted_rand = RanGen.Random()*inv_sum;
+                                inv_index = 0;
+                                while(weighted_rand > inv[inv_index]) {
+                                    weighted_rand -= inv[inv_index];
+                                    inv_index++;
+                                }
+                                if(neighborhood[inv_index] != land_grid[i][j]) {
+                                    //land_grid[i][j] = neighborhood[inv_index];
+                                    updates.push_back({i, j, neighborhood[inv_index]});
+                                }
                             }
                         }
                     }
@@ -257,8 +269,29 @@ int main(int argc, char* argv[]){
                 if(j == sub_size-1 && right_proc != MPI_PROC_NULL) {
                     MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, right_proc, (sub_size+2)*(i), 1, MPI_DOUBLE, win);
                 }
+                bool unmask = true;
+                for(int x = -1; x < 1; x++) {
+                    for(int y = -1; y <= 1; y++) {
+                        if((x != 0 || y != 0) && i+x >= 0 && i+x < sub_size+1 && j+y >= 0 && j+y < sub_size+1) {
+                            bool unmask = true;
+                            if(land_grid[i+x][j+x] != val) { unmask = false; }
+                            for(int xx = -1; xx < 1; xx++) {
+                                for(int yy = -1; yy <= 1; yy++) {
+                                    if((xx != 0 || yy != 0) && i+x+xx >= 0 && i+x+xx < sub_size+1 && j+y+yy >= 0 && j+y+yy < sub_size+1) {
+                                        if(land_grid[i+x+xx][j+y+yy] != val) {
+                                            unmask = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if(!unmask) break;
+                            }
+                            land_mask[i+x][j+y] = !unmask;
+                        }
+                    }
+                }
             }
-            
+
             //MPI_Win_fence(0, win);
 
             // renormalize every nstep steps
