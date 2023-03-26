@@ -153,6 +153,7 @@ int main(int argc, char* argv[]){
     int top_right_proc = (proc_row*sqrt_nprocs-1+sqrt_nprocs)%sqrt_nprocs + (proc_col+1)%sqrt_nprocs;
     int bottom_left_proc = (proc_row*sqrt_nprocs+1)%sqrt_nprocs + (proc_col-1+sqrt_nprocs)%sqrt_nprocs;
     int bottom_right_proc = (proc_row*sqrt_nprocs+1)%sqrt_nprocs + (proc_col+1)%sqrt_nprocs;
+    // TODO: figure out why output doesn't line up
 
     for(int rep = 0; rep < nrep; rep++) {
         rep_start_time = std::chrono::system_clock::now();
@@ -197,27 +198,27 @@ int main(int argc, char* argv[]){
                                 land_mask[i+x][j+y] = true;
                             }
                         }
-                        if(i == 0 && top_proc != MPI_PROC_NULL) {
+                        if(i == 0) {
                             MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, top_proc, (proc_cols[top_proc]+2)*(proc_rows[top_proc]+1)+j, 1, MPI_DOUBLE, win);
-                            if(j == 0 && top_left_proc != MPI_PROC_NULL) {
+                            if(j == 0) {
                                 MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, top_left_proc, (proc_rows[top_left_proc]+2)*(proc_cols[top_left_proc]+2)-1, 1, MPI_DOUBLE, win);
-                            } else if(j == cols+1 && top_right_proc != MPI_PROC_NULL) {
+                            } else if(j == cols-1) {
                                 MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, top_right_proc, (proc_cols[top_right_proc]+2)*(proc_rows[top_right_proc]+1), 1, MPI_DOUBLE, win);
                             }
                         }
-                        if(i == rows+1 && bottom_proc != MPI_PROC_NULL) {
+                        if(i == rows-1) {
                             MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, bottom_proc, j, 1, MPI_DOUBLE, win);
-                            if(j == 0 && bottom_left_proc != MPI_PROC_NULL) {
+                            if(j == 0) {
                                 MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, bottom_left_proc, (proc_cols[bottom_left_proc]+1), 1, MPI_DOUBLE, win);
-                            } else if(j == cols+1 && bottom_right_proc != MPI_PROC_NULL) {
+                            } else if(j == cols-1) {
                                 MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, bottom_right_proc, 0, 1, MPI_DOUBLE, win);
                             }
 
                         }
-                        if(j == 0 && left_proc != MPI_PROC_NULL) {
+                        if(j == 0) {
                             MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, left_proc, (proc_cols[left_proc]+2)*(i+1)-1, 1, MPI_DOUBLE, win);
                         }
-                        if(j == cols+1 && right_proc != MPI_PROC_NULL) {
+                        if(j == cols-1) {
                             MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, right_proc, (proc_cols[right_proc]+2)*(i), 1, MPI_DOUBLE, win);
                         }
                     }
@@ -265,27 +266,27 @@ int main(int argc, char* argv[]){
             }
             for(const auto& [i, j, val] : updates) {
                 land_grid[i][j] = val;
-                if(i == 0 && top_proc != MPI_PROC_NULL) {
+                if(i == 0) {
                     MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, top_proc, (proc_cols[top_proc]+2)*(proc_rows[top_proc]+1)+j, 1, MPI_DOUBLE, win);
-                    if(j == 0 && top_left_proc != MPI_PROC_NULL) {
+                    if(j == 0) {
                         MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, top_left_proc, (proc_rows[top_left_proc]+2)*(proc_cols[top_left_proc]+2)-1, 1, MPI_DOUBLE, win);
-                    } else if(j == cols+1 && top_right_proc != MPI_PROC_NULL) {
+                    } else if(j == cols-1) {
                         MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, top_right_proc, (proc_cols[top_right_proc]+2)*(proc_rows[top_right_proc]+1), 1, MPI_DOUBLE, win);
                     }
                 }
-                if(i == rows+1 && bottom_proc != MPI_PROC_NULL) {
-                    MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, bottom_proc, j, 1, MPI_DOUBLE, win);                        
-                    if(j == 0 && bottom_left_proc != MPI_PROC_NULL) {
+                if(i == rows-1) {
+                    MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, bottom_proc, j, 1, MPI_DOUBLE, win);
+                    if(j == 0) {
                         MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, bottom_left_proc, (proc_cols[bottom_left_proc]+1), 1, MPI_DOUBLE, win);
-                    } else if(j == cols+1 && bottom_right_proc != MPI_PROC_NULL) {
+                    } else if(j == cols-1) {
                         MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, bottom_right_proc, 0, 1, MPI_DOUBLE, win);
                     }
 
                 }
-                if(j == 0 && left_proc != MPI_PROC_NULL) {
+                if(j == 0) {
                     MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, left_proc, (proc_cols[left_proc]+2)*(i+1)-1, 1, MPI_DOUBLE, win);
                 }
-                if(j == cols+1 && right_proc != MPI_PROC_NULL) {
+                if(j == cols-1) {
                     MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, right_proc, (proc_cols[right_proc]+2)*(i), 1, MPI_DOUBLE, win);
                 }
                 bool unmask = true;
