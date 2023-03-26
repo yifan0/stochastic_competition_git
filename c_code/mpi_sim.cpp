@@ -143,35 +143,16 @@ int main(int argc, char* argv[]){
     MPI_Win_fence(0, win);
 
     // Exchange ghost cells with neighboring processes using one-sided communication
-    // TODO: problem with dividing up when the sizes aren't equal -- need to have different info for height and width so we can communicate outwards without overflowing
-    int top_proc = rank - sqrt_nprocs;
-    int bottom_proc = rank + sqrt_nprocs;
-    int left_proc = rank - 1;
-    int right_proc = rank + 1;
-    int top_left_proc = top_proc - 1;
-    int top_right_proc = top_proc + 1;
-    int bottom_left_proc = bottom_proc - 1;
-    int bottom_right_proc = bottom_proc + 1;
-    if (rank % sqrt_nprocs == 0) {
-        left_proc = MPI_PROC_NULL;
-        top_left_proc = MPI_PROC_NULL;
-        bottom_left_proc = MPI_PROC_NULL;
-    }
-    if (rank % sqrt_nprocs == sqrt_nprocs - 1) {
-        right_proc = MPI_PROC_NULL;
-        top_right_proc = MPI_PROC_NULL;
-        bottom_right_proc = MPI_PROC_NULL;
-    }
-    if (rank < sqrt_nprocs || nprocs == 1) {
-        top_proc = MPI_PROC_NULL;
-        top_left_proc = MPI_PROC_NULL;
-        top_right_proc = MPI_PROC_NULL;
-    }
-    if (rank >= nprocs - sqrt_nprocs) {
-        bottom_proc = MPI_PROC_NULL;
-        bottom_left_proc = MPI_PROC_NULL;
-        bottom_right_proc = MPI_PROC_NULL;
-    }
+    int proc_row = rank / sqrt_nprocs;
+    int proc_col = rank % sqrt_nprocs;
+    int top_proc = (proc_row*sqrt_nprocs-1+sqrt_nprocs)%sqrt_nprocs + proc_col;
+    int bottom_proc = (proc_row*sqrt_nprocs+1)%sqrt_nprocs + proc_col;
+    int left_proc = (proc_row*sqrt_nprocs) + (proc_col-1+sqrt_nprocs)%sqrt_nprocs;
+    int right_proc = (proc_row*sqrt_nprocs) + (proc_col+1)%sqrt_nprocs;
+    int top_left_proc = (proc_row*sqrt_nprocs-1+sqrt_nprocs)%sqrt_nprocs + (proc_col-1+sqrt_nprocs)%sqrt_nprocs;
+    int top_right_proc = (proc_row*sqrt_nprocs-1+sqrt_nprocs)%sqrt_nprocs + (proc_col+1)%sqrt_nprocs;
+    int bottom_left_proc = (proc_row*sqrt_nprocs+1)%sqrt_nprocs + (proc_col-1+sqrt_nprocs)%sqrt_nprocs;
+    int bottom_right_proc = (proc_row*sqrt_nprocs+1)%sqrt_nprocs + (proc_col+1)%sqrt_nprocs;
 
     for(int rep = 0; rep < nrep; rep++) {
         rep_start_time = std::chrono::system_clock::now();
