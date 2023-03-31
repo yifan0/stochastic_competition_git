@@ -89,6 +89,13 @@ size_t get_depth(speciation_tree_node* root) {
     return depth+1;
 }
 
+void normalize(speciation_tree_node* root, cell_type avg) {
+    root->val = root->val/avg;
+    for(auto child : root->children) {
+        normalize(child, avg);
+    }
+}
+
 int main(int argc, char* argv[]){
     int nrep = 10;
     int size = 100;
@@ -277,15 +284,39 @@ int main(int argc, char* argv[]){
                     }
                 }
             }
+
+            // Normalize
+            if(step%nsteps == 0) {
+                // Calculate global average
+                cell_type average = 0;
+                for(int i = 0; i < size; i++) {
+                    cell_type row_average = 0;
+                    for(int j = 0; j < size; j++) {
+                        row_average += land_grid[i][j]->val;
+                    }
+                    average += (row_average/(size*size));
+                }
+                // divide everything by the global average -- iterate over tree
+                normalize(speciation_root, average);
+            }
         }
 
         // Calculate summary statistics
-        /*
-        // TODO: adjust so that we're 
-        for(size_t summary_size = 4; summary_size < size; summary_size << 1) {
+        // TODO: optimize 
+        for(size_t summary_size = 16; summary_size < size; summary_size << 1) {
+            // Statistics:
+            //  1. Number of unique species
+            //  2. Effective Population
+            //      = log(max) - log(min)
+            //  3. Variance
+            //      = sum(x1^2 + x2^2 + ... + xn^2)/n - (sum(x1 + x2 + ... + xn) / n)^2
             // Count unique values
+            map<cell_type, size_t> count_set;
             vector<size_t> unique_counts;
             vector<cell_type> deltas;
+            // TODO: fill the set for the startup values
+            // TODO: set it so that each time it clears the old part and adds in the new part
+            // TODO: if we are doing a search for items, then make sure that's efficient
             for(size_t i = 0; i < size-summary_size; i++) {
                 for(size_t j = 0; j < size-summary_size; j++) {
                     //set<speciation_tree_node*> unique_values;
@@ -303,6 +334,7 @@ int main(int argc, char* argv[]){
                     //deltas.push_back(*unique_values.rbegin() - *unique_values.begin());
                 }
             }
+
             // summarize unique_counts
             double average_unique_count = 0;
             for(size_t count : unique_counts) {
@@ -340,7 +372,6 @@ int main(int argc, char* argv[]){
             println("Average of section averages for rep %d on size %d = %f", rep, summary_size, average_section);
 
         }
-        */
 
         rep_end_time = std::chrono::system_clock::now();
         std::chrono::duration<double> rep_time = rep_end_time - rep_start_time;
