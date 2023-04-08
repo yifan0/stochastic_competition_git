@@ -1,15 +1,15 @@
 #!/bin/bash
 #SBATCH --job-name=sim    # Job name
-#SBATCH --time=02:00:00                 # Time limit hrs:min:sec
+#SBATCH --time=04:00:00                 # Time limit hrs:min:sec
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --output=run_mpi_%j.log   # Standard output and error log
-#SBATCH --partition secondary-eth
+#SBATCH --output=test_mpi_%j.log   # Standard output and error log
+#SBATCH --partition eng-instruction 
 
-module load gcc/7.2.0
-module load openmpi/4.1.0-gcc-7.2.0-pmi2
+SIZE=500
 
-echo "1 nodes with 1 task each"
+echo Tasks = ${SLURM_NTASKS}
+echo Nodes = ${SLURM_JOB_NUM_NODES}
 
-mpirun ./mpi_sim 512 1 test_mpi_3_
+mpirun ./mpi_sim ${SIZE} 1 test_mpi_${SIZE}_${SLURM_JOB_NUM_NODES}_${SLURM_NTASKS}_
 

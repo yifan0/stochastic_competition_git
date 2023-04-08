@@ -63,4 +63,5 @@ for i in range(first_line,len(lines),end_row-start_row+4):
             matrix[row_idx-1][columns[k]-1] = row[k]
 
 np.savetxt(f"{file_name[:-4]}.csv", matrix, delimiter=",", fmt='%.5f')
+print("Saved to", f"{file_name[:-4]}.csv")
 

@@ -1,2 +1,6 @@
 *.log
 *.out
+mpi_sim
+tree_sim
+ga_sim
+sim

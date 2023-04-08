@@ -14,8 +14,10 @@
 #include "userintf.cpp"
 #include "macdecls.h"
 #include <mpi.h>
-using namespace std;
+#include <iostream> // std::cout
+#include <cxxopts.hpp> // to handle cmdline args
 #include "ga++.h"
+using namespace std;
 
 #define println(...) { if(me == 0) { printf(__VA_ARGS__); printf("\n"); } }
 //#define debug(...) { if(true) { printf("Rank %d: ", me); printf(__VA_ARGS__); printf("\n"); GA_Sync(); } }
@@ -24,15 +26,6 @@ using namespace std;
 
 #define   NDIM         2
 #define   GHOSTS       2
-
-#define USAGE \
-"sim gridsize nreps outfile"
-
-#define HELPTEXT \
-"Simulate plant spread on grid\n\
-    gridsize : number of cells along an edge of the grid\n\
-    nreps : number of repetitions of the simulation\n\
-    outfile : output file name\n"
 
 typedef double cell_type;
 typedef std::tuple<int, int, cell_type> cell_update;
@@ -69,31 +62,26 @@ int main(int argc, char* argv[]){
     me = GA_Nodeid();
     nprocs = GA_Nnodes();
 
-    bool badargs = false;
-    if(argc < 1 || argc > 4) badargs = true;
-    if(argc > 1) {
-        size = stoi(argv[1]);
-        if(size < 1) {
-            badargs = true;
-        }
+    cxxopts::Options options("mpirun -n N ./ga_sim", "Stocastic competition simulation with GlobalArray parallelism");
+
+    options.add_options()
+        ("s,size", "grid size", cxxopts::value<int>()->default_value("500"))
+        ("r,reps", "number of repetitions", cxxopts::value<int>()->default_value("1"))
+        ("o,outfile", "output file prefix", cxxopts::value<std::string>()->default_value("out"))
+        ("h,help", "Print usage")
+        ;
+
+    auto result = options.parse(argc, argv);
+
+    if(result.count("help")) {
+        if(me == 0)
+            std::cout << options.help() << std::endl;
+        MPI_Finalize();
+        exit(0);
     }
-    if(argc > 2) {
-        nrep = stoi(argv[2]);
-        if(nrep < 1) {
-            badargs = true;
-        }
-    }
-    if(argc > 3) {
-        outfile = argv[3];
-    }
+
     timescale = 100*(size*1.0/p);
     endtime = timescale/nsteps;
-
-    if(badargs) {
-        if(me == 0)
-            fprintf(stderr, ">E Usage: %s\n", USAGE);
-        GA_Error("Usage error", 1);
-    }
 
     start_time = std::chrono::system_clock::now();
 
@@ -192,8 +180,8 @@ int main(int argc, char* argv[]){
 
             debug("After speciation %d", step);
 
-            GA_Update_ghosts(ga_land_grid);
-            GA_Update_ghosts(ga_land_mask);
+            //GA_Update_ghosts(ga_land_grid);
+            //GA_Update_ghosts(ga_land_mask);
 
             debug("After update ghosts %d", step);
 

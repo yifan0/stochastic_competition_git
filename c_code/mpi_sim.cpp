@@ -13,22 +13,13 @@
 #include "sfmt.cpp"
 #include "userintf.cpp"
 #include <mpi.h>
+#include <iostream> // std::cout
+#include <cxxopts.hpp> // to handle cmdline args
 using namespace std;
-
-#define DEBUG
 
 #define println(...) { if(rank == 0) { printf(__VA_ARGS__); printf("\n"); } }
 #define debug(...) { { printf("Rank = %d: ", rank); printf(__VA_ARGS__); printf("\n"); } }
 #define print(...) { printf(__VA_ARGS__); }
-
-#define USAGE \
-    "sim gridsize nreps outfile"
-
-#define HELPTEXT \
-    "Simulate plant spread on grid\n\
-gridsize : number of cells along an edge of the grid\n\
-nreps : number of repetitions of the simulation\n\
-outfile : output file name\n"
 
 typedef double cell_type;
 typedef std::tuple<int, int, cell_type> cell_update;
@@ -49,37 +40,37 @@ int main(int argc, char* argv[]){
     std::string outfile = "output_";
     std::chrono::time_point<std::chrono::system_clock> start_time, end_time, rep_start_time, rep_end_time, out_start_time, out_end_time;
 
-    //MPI_Init(&argc, &argv);
-
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    bool badargs = false;
-    if(argc < 1 || argc > 4) badargs = true;
-    if(argc > 1) {
-        size = stoi(argv[1]);
-        if(size < 1) {
-            badargs = true;
-        }
+    cxxopts::Options options("mpirun -n N ./mpi_sim", "Stocastic competition simulation with MPI parallelism");
+
+    options.add_options()
+        ("s,size", "grid size", cxxopts::value<int>()->default_value("500"))
+        ("r,reps", "number of repetitions", cxxopts::value<int>()->default_value("1"))
+        ("o,outfile", "output file prefix", cxxopts::value<std::string>()->default_value("out"))
+        ("h,help", "Print usage")
+        ;
+
+    auto result = options.parse(argc, argv);
+
+    if(result.count("help")) {
+        if(rank == 0)
+            std::cout << options.help() << std::endl;
+        MPI_Finalize();
+        exit(0);
     }
-    if(argc > 2) {
-        nrep = stoi(argv[2]);
-        if(nrep < 1) {
-            badargs = true;
-        }
-    }
-    if(argc > 3) {
-        outfile = argv[3];
-    }
-    outfile += std::to_string(rank) + ".log";
+    if(result.count("outfile"))
+        outfile = result["outfile"].as<std::string>();
+    if(result.count("size"))
+        size = result["size"].as<int>();
+    if(result.count("reps"))
+        nrep = result["reps"].as<int>();
+
+
+    outfile += std::to_string(rank) + ".csv";
     timescale = 100*(size*1.0/p);
     endtime = timescale/nsteps;
-
-    if(badargs) {
-        println(">E Usage: %s\n", USAGE);
-        MPI_Finalize();
-        return 1;
-    }
 
     int sqrt_nprocs = (int) std::sqrt(nprocs);
     if(sqrt_nprocs * sqrt_nprocs != nprocs) {
