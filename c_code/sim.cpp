@@ -104,6 +104,10 @@ int main(int argc, char* argv[]){
         cell_type inv_sum = 0;
         int inv_index = 0;
 
+        int i, j, row, col;
+        cell_type min = 1;
+        cell_type max = 1;
+
         for(int step = 0; step < timescale; step++) {
 
             // speciation rule
@@ -112,8 +116,8 @@ int main(int argc, char* argv[]){
             while(spec_events.size() < speciation_event_count) {
                 int index = rand() % (size*size);
                 if(!spec_events.count(index)) {
-                    int i = index % size;
-                    int j = index / size;
+                    i = index % size;
+                    j = index / size;
                     spec_events.insert(index);
                     int down = rand() % 2;
                     float ratio = (1+RanGen.Random()*mutsize);
@@ -123,37 +127,18 @@ int main(int argc, char* argv[]){
                     float probsuccess = p*ratio/(p*(ratio-1)+1);
                     if(RanGen.Random() <= probsuccess) {
                         land_grid[i][j] *= ratio;
-                        land_mask[i][j] = true;
+                        if(land_grid[i][j] > max) {
+                            max = land_grid[i][j];
+                        }
+                        if(land_grid[i][j] < min) {
+                            min = land_grid[i][j];
+                        }
                         for(int x = -1; x < 1; x++) {
                             for(int y = -1; y <= 1; y++) {
-                                if((x != 0 || y != 0)) {
-                                    if(i+x >= 0 && i+x < size && j+y >= 0 && j+y < size) {
-                                        land_mask[i+x][j+y] = true;
-                                    } else {
-                                        // wrap around
-                                        if(i+x < 0) {
-                                            if(j+y < 0) {
-                                                land_mask[size-1][size-1] = true;
-                                            } else if(j+y == size) {
-                                                land_mask[size-1][0] = true;
-                                            } else {
-                                                land_mask[size-1][j+y] = true;
-                                            }
-                                        } else if(i+x == size) {
-                                            if(j+y < 0) {
-                                                land_mask[0][size-1] = true;
-                                            } else if(j+y == size) {
-                                                land_mask[0][0] = true;
-                                            } else {
-                                                land_mask[0][j+y] = true;
-                                            }
-                                        } else if(j+y == size) {
-                                            land_mask[i+x][0] = true;
-                                        } else if(j+y < 0) {
-                                            land_mask[i+x][size-1] = true;
-                                        }
-                                    }
-                                }
+                                // wrap around
+                                row = (i+x+size)%size;
+                                col = (j+y+size)%size;
+                                land_mask[row][col] = true;
                             }
                         }
                     }
@@ -172,31 +157,9 @@ int main(int argc, char* argv[]){
                             for(int x = -1; x < 1; x++) {
                                 for(int y = -1; y <= 1; y++) {
                                     if((x != 0 || y != 0)) {
-                                        if(i+x >= 0 && i+x < size && j+y >= 0 && j+y < size) {
-                                            neighborhood[inv_index] = land_grid[i+x][j+y];
-                                        } else {
-                                            if(i+x < 0) {
-                                                if(j+y < 0) {
-                                                    neighborhood[inv_index] = land_grid[size-1][size-1];
-                                                } else if(j+y == size) {
-                                                    neighborhood[inv_index] = land_grid[size-1][0];
-                                                } else {
-                                                    neighborhood[inv_index] = land_grid[size-1][j+y];
-                                                }
-                                            } else if(i+x == size) {
-                                                if(j+y < 0) {
-                                                    neighborhood[inv_index] = land_grid[0][size-1];
-                                                } else if(j+y == size) {
-                                                    neighborhood[inv_index] = land_grid[0][0];
-                                                } else {
-                                                    neighborhood[inv_index] = land_grid[0][j+y];
-                                                }
-                                            } else if(j+y == size) {
-                                                neighborhood[inv_index] = land_grid[i+x][0];
-                                            } else if(j+y < 0) {
-                                                neighborhood[inv_index] = land_grid[i+x][size-1];
-                                            }
-                                        }
+                                        row = (i+x+size)%size;
+                                        col = (j+y+size)%size;
+                                        neighborhood[inv_index] = land_grid[row][col];
                                         inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
                                         inv_sum += inv[inv_index];
                                         inv_index++;
@@ -213,7 +176,6 @@ int main(int argc, char* argv[]){
                                     inv_index++;
                                 }
                                 if(neighborhood[inv_index] != land_grid[i][j]) {
-                                    //land_grid[i][j] = neighborhood[inv_index];
                                     updates.push_back({i, j, neighborhood[inv_index]});
                                 }
                             }
@@ -231,10 +193,10 @@ int main(int argc, char* argv[]){
                             bool unmask = true;
                             for(int xx = -1; xx < 1; xx++) {
                                 for(int yy = -1; yy <= 1; yy++) {
-                                    int a = (i+x+xx+size)%size;
-                                    int b = (j+y+yy+size)%size;
+                                    row = (i+x+xx+size)%size;
+                                    col = (j+y+yy+size)%size;
                                     if((xx != 0 || yy != 0)) {
-                                        if(land_grid[a][b] != val) {
+                                        if(land_grid[row][col] != val) {
                                             unmask = false;
                                             break;
                                         }
@@ -242,36 +204,16 @@ int main(int argc, char* argv[]){
                                 }
                                 if(!unmask) break;
                             }
-                            if(i+x == -1) {
-                                if(j+y == -1) {
-                                    land_mask[size-1][size-1] = !unmask;
-                                } else if(j+y == size) {
-                                    land_mask[size-1][0] = !unmask;
-                                } else {
-                                    land_mask[size-1][j+y] = !unmask;
-                                }
-                            } else if(i+x == size) {
-                                if(j+y == -1) {
-                                    land_mask[0][size-1] = !unmask;
-                                } else if(j+y == size) {
-                                    land_mask[0][0] = !unmask;
-                                } else {
-                                    land_mask[0][j+y] = !unmask;
-                                }
-                            } else if(j+y == -1) {
-                                land_mask[i+x][size-1] = !unmask;
-                            } else if(j+y == size) {
-                                land_mask[i+x][0] = !unmask;
-                            } else {
-                                land_mask[i+x][j+y] = !unmask;
-                            }
+                            row = (i+x+size)%size;
+                            col = (j+y+size)%size;
+                            land_mask[row][col] = !unmask;
                         }
                     }
                 }
             }
 
             // renormalize every nstep steps
-            if(step%endtime == 0) {
+            if( std::numeric_limits<cell_type>::max() / (1+mutsize) > max ) {
                 float land_grid_mean = 0;
                 float tmp_sum = 0;
                 for(int i = 0; i < size; i++) {
@@ -281,9 +223,13 @@ int main(int argc, char* argv[]){
                     land_grid_mean += tmp_sum/(size*size);
                     tmp_sum = 0;
                 }
+                max = 1;
+                min = 1;
                 for(int i = 0; i < size; i++) {
                     for(int j = 0; j < size; j++) {
                         land_grid[i][j] /= land_grid_mean; // normalize grid
+                        if(land_grid[i][j] > max) max = land_grid[i][j];
+                        if(land_grid[i][j] < min) min = land_grid[i][j];
                     }
                 }
             }
