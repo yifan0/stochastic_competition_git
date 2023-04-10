@@ -136,8 +136,12 @@ int main(int argc, char* argv[]){
                         for(int x = -1; x < 1; x++) {
                             for(int y = -1; y <= 1; y++) {
                                 // wrap around
-                                row = (i+x+size)%size;
-                                col = (j+y+size)%size;
+                                row = i+x;
+                                col = j+y;
+                                if(row >= size || row < 0)
+                                    row = (row+size)%size;
+                                if(col >= size || col < 0)
+                                    col = (col+size)%size;
                                 land_mask[row][col] = true;
                             }
                         }
@@ -157,8 +161,12 @@ int main(int argc, char* argv[]){
                             for(int x = -1; x < 1; x++) {
                                 for(int y = -1; y <= 1; y++) {
                                     if((x != 0 || y != 0)) {
-                                        row = (i+x+size)%size;
-                                        col = (j+y+size)%size;
+                                        row = i+x;
+                                        col = j+y;
+                                        if(row >= size || row < 0)
+                                            row = (row+size)%size;
+                                        if(col >= size || col < 0)
+                                            col = (col+size)%size;
                                         neighborhood[inv_index] = land_grid[row][col];
                                         inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
                                         inv_sum += inv[inv_index];
@@ -193,8 +201,12 @@ int main(int argc, char* argv[]){
                             bool unmask = true;
                             for(int xx = -1; xx < 1; xx++) {
                                 for(int yy = -1; yy <= 1; yy++) {
-                                    row = (i+x+xx+size)%size;
-                                    col = (j+y+yy+size)%size;
+                                    row = i+x+xx;
+                                    col = j+y+yy;
+                                    if(row >= size || row < 0)
+                                        row = (i+x+xx+size)%size;
+                                    if(col >= size || col < 0)
+                                        col = (j+y+yy+size)%size;
                                     if((xx != 0 || yy != 0)) {
                                         if(land_grid[row][col] != val) {
                                             unmask = false;
@@ -204,16 +216,20 @@ int main(int argc, char* argv[]){
                                 }
                                 if(!unmask) break;
                             }
-                            row = (i+x+size)%size;
-                            col = (j+y+size)%size;
+                            row = i+x;
+                            col = j+y;
+                            if(row >= size || row < 0)
+                                row = (row+size)%size;
+                            if(col >= size || col < 0)
+                                col = (col+size)%size;
                             land_mask[row][col] = !unmask;
                         }
                     }
                 }
             }
 
-            // renormalize every nstep steps
-            if( std::numeric_limits<cell_type>::max() / (1+mutsize) > max ) {
+            // renormalize to prevent overflows
+            if( std::numeric_limits<cell_type>::max() / (1+mutsize) < max ) {
                 float land_grid_mean = 0;
                 float tmp_sum = 0;
                 for(int i = 0; i < size; i++) {
@@ -232,6 +248,7 @@ int main(int argc, char* argv[]){
                         if(land_grid[i][j] < min) min = land_grid[i][j];
                     }
                 }
+                println("Normalized at step %d", step);
             }
 
         }
