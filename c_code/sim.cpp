@@ -260,7 +260,7 @@ int main(int argc, char* argv[]){
 
         out_start_time = std::chrono::system_clock::now();
         FILE *fp;
-        outfile += std::to_string(rep) + ".log";
+        outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".log";
         fp = fopen(outfile.c_str(), "w");
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size-1; j++) {
