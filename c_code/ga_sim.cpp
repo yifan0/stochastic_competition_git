@@ -79,6 +79,9 @@ int main(int argc, char* argv[]){
         MPI_Finalize();
         exit(0);
     }
+    outfile = result["outfile"].as<std::string>();
+    size = result["size"].as<int>();
+    nrep = result["reps"].as<int>();
 
     timescale = 100*(size*1.0/p);
     endtime = timescale/nsteps;
@@ -86,7 +89,7 @@ int main(int argc, char* argv[]){
     start_time = std::chrono::system_clock::now();
 
     // grid for average across reps
-    GA_Mask_sync(1, 0); // turns on/off sync when updating ghosts. TODO: turn off for both before and after and check performance
+    GA_Mask_sync(1, 1); // turns on/off sync when updating ghosts. TODO: turn off for both before and after and check performance
     for(int i = 0; i < NDIM; i++) {
         dims[i] = size;
         ghost_width[i] = GHOSTS;
@@ -180,8 +183,8 @@ int main(int argc, char* argv[]){
 
             debug("After speciation %d", step);
 
-            //GA_Update_ghosts(ga_land_grid);
-            //GA_Update_ghosts(ga_land_mask);
+            GA_Update_ghosts(ga_land_grid);
+            GA_Update_ghosts(ga_land_mask);
 
             debug("After update ghosts %d", step);
 
@@ -252,19 +255,19 @@ int main(int argc, char* argv[]){
             debug("After updates %d", step);
 
             // renormalize every nstep steps
-            if(step%nsteps == 0 && false) {
+            if(step%endtime == 0) {
                 cell_type land_grid_mean = 0;
                 cell_type tmp_sum = 0;
-                for(int i = 0; i < hi[0]-lo[0]; i++) {
-                    for(int j = 0; j < hi[1]-lo[1]; j++) {
+                for(int i = lo[0]; i < hi[0]; i++) {
+                    for(int j = lo[1]; j < hi[1]; j++) {
                         tmp_sum += land_grid_ptr[i*grid_ld[0]+j];
                     }
                     land_grid_mean += tmp_sum/(size*size);
                     tmp_sum = 0;
                 }
                 MPI_Allreduce(MPI_IN_PLACE, &land_grid_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-                for(int i = 0; i < hi[0]-lo[0]; i++) {
-                    for(int j = 0; j < hi[1]-lo[1]; j++) {
+                for(int i = lo[0]; i < hi[0] && false; i++) {
+                    for(int j = lo[1]; j < hi[1]; j++) {
                         land_grid_ptr[i*grid_ld[0]+j] /= land_grid_mean; // normalize grid
                     }
                 }
@@ -283,7 +286,7 @@ int main(int argc, char* argv[]){
 
         out_start_time = std::chrono::system_clock::now();
         FILE *fp;
-        outfile = argv[3] + std::to_string(rep) + ".log";
+        outfile = outfile + std::to_string(rep) + ".log";
         fp = fopen(outfile.c_str(), "w");
         GA_Print_file(fp, ga_land_grid);
         fclose(fp);

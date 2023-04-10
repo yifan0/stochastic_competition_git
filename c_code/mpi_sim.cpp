@@ -60,15 +60,10 @@ int main(int argc, char* argv[]){
         MPI_Finalize();
         exit(0);
     }
-    if(result.count("outfile"))
-        outfile = result["outfile"].as<std::string>();
-    if(result.count("size"))
-        size = result["size"].as<int>();
-    if(result.count("reps"))
-        nrep = result["reps"].as<int>();
+    outfile = result["outfile"].as<std::string>();
+    size = result["size"].as<int>();
+    nrep = result["reps"].as<int>();
 
-
-    outfile += std::to_string(rank) + ".csv";
     timescale = 100*(size*1.0/p);
     endtime = timescale/nsteps;
 
@@ -307,7 +302,7 @@ int main(int argc, char* argv[]){
 
             // renormalize every nstep steps
             // normalize the simulated result so that the fittest species will not have a very high effective population so that it always outcompetes other species
-            if(step%nsteps == 0) {
+            if(step%endtime == 0) {
                 // Calculate a global average. This is not precise because it double-counts the boundaries, but it's a rough estimate for normalization
                 cell_type local_average = 0;
                 for(size_t i = 1; i < rows+1; i++) {
@@ -359,11 +354,7 @@ int main(int argc, char* argv[]){
 
         // Output for this rep
         out_start_time = std::chrono::system_clock::now();
-        if(argc > 3)
-            outfile = argv[3];
-        else
-            outfile = "output_";
-        outfile += "rep" + std::to_string(rep) + "_rank" + std::to_string(rank) + ".log";
+        outfile += "rep" + std::to_string(rep) + "_rank" + std::to_string(rank) + ".csv";
         FILE *fp;
         fp = fopen(outfile.c_str(), "w");
         print("Writing to file %s\n", outfile.c_str());

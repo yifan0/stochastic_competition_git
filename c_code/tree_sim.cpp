@@ -127,12 +127,9 @@ int main(int argc, char* argv[]){
         std::cout << options.help() << std::endl;
         exit(0);
     }
-    if(result.count("outfile"))
-        outfile = result["outfile"].as<std::string>();
-    if(result.count("size"))
-        size = result["size"].as<int>();
-    if(result.count("reps"))
-        nrep = result["reps"].as<int>();
+    outfile = result["outfile"].as<std::string>();
+    size = result["size"].as<int>();
+    nrep = result["reps"].as<int>();
 
     timescale = 100*(size*1.0/p);
     endtime = timescale/nsteps;
@@ -288,7 +285,7 @@ int main(int argc, char* argv[]){
             }
 
             // Normalize
-            if(step%nsteps == 0) {
+            if(step%endtime == 0) {
                 // Calculate global average
                 cell_type average = 0;
                 for(int i = 0; i < size; i++) {
@@ -393,7 +390,7 @@ int main(int argc, char* argv[]){
         }
         fclose(fp);
 
-        outfile = argv[3] + std::to_string(rep) + ".tree";
+        outfile += std::to_string(rep) + ".tree";
         fp = fopen(outfile.c_str(), "w");
         string output_tree = toString(speciation_root);
         fprintf(fp, "%s;", output_tree.c_str());

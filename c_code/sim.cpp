@@ -50,12 +50,9 @@ int main(int argc, char* argv[]){
         std::cout << options.help() << std::endl;
         exit(0);
     }
-    if(result.count("outfile"))
-        outfile = result["outfile"].as<std::string>();
-    if(result.count("size"))
-        size = result["size"].as<int>();
-    if(result.count("reps"))
-        nrep = result["reps"].as<int>();
+    outfile = result["outfile"].as<std::string>();
+    size = result["size"].as<int>();
+    nrep = result["reps"].as<int>();
 
     timescale = 100*(size*1.0/p);
     endtime = timescale/nsteps;
@@ -274,7 +271,7 @@ int main(int argc, char* argv[]){
             }
 
             // renormalize every nstep steps
-            if(step%nsteps == 0) {
+            if(step%endtime == 0) {
                 float land_grid_mean = 0;
                 float tmp_sum = 0;
                 for(int i = 0; i < size; i++) {
@@ -300,7 +297,7 @@ int main(int argc, char* argv[]){
 
         out_start_time = std::chrono::system_clock::now();
         FILE *fp;
-        outfile = argv[3] + std::to_string(rep) + ".log";
+        outfile += std::to_string(rep) + ".log";
         fp = fopen(outfile.c_str(), "w");
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size-1; j++) {

@@ -1,7 +1,5 @@
 # Implementations with C++
 
-ga_sim.cpp  mpi_sim.cpp  sim.cpp  tree_sim.cpp
-
 ## Sequential with Trees
 
 - Code: tree\_sim.cpp

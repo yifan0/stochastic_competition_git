@@ -1,5 +1,6 @@
 *.log
 *.out
+*.jld
 mpi_sim
 tree_sim
 ga_sim
