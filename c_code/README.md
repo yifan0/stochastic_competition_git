@@ -1,5 +1,9 @@
 # Implementations with C++
 
+From `c_code` directory, build by running:
+
+`mkdir build && cd build && cmake .. && make`
+
 ## Sequential with Trees
 
 - Code: tree\_sim.cpp
