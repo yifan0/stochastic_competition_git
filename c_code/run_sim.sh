@@ -9,5 +9,5 @@
 
 SIZE=900
 
-/usr/bin/time -v ./sim -s ${SIZE} -o test_sequential_${SIZE}_
+/usr/bin/time -v ./build/sim -s ${SIZE} -o test_sequential_${SIZE}_
 

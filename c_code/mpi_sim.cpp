@@ -105,7 +105,7 @@ int main(int argc, char* argv[]){
     start_time = std::chrono::system_clock::now();
 
     // Random number generation
-    CRandomSFMT1 RanGen((int)time(NULL)); // Agner Combined generator
+    CRandomSFMT1 RanGen((int)time(NULL) + rank); // Agner Combined generator
     // distribution for speciation events
     std::default_random_engine generator;
     std::binomial_distribution<int> speciation_distribution(rows*cols, specrate);

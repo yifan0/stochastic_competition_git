@@ -11,5 +11,5 @@ SIZE=500
 echo Tasks = ${SLURM_NTASKS}
 echo Nodes = ${SLURM_JOB_NUM_NODES}
 
-mpirun ./mpi_sim -s ${SIZE} -o test_mpi_${SIZE}_${SLURM_JOB_NUM_NODES}_${SLURM_NTASKS}_
+mpirun ./build/mpi_sim -s ${SIZE} -o test_mpi_${SIZE}_${SLURM_JOB_NUM_NODES}_${SLURM_NTASKS}_
 

@@ -20,8 +20,7 @@
 using namespace std;
 
 #define println(...) { if(me == 0) { printf(__VA_ARGS__); printf("\n"); } }
-//#define debug(...) { if(true) { printf("Rank %d: ", me); printf(__VA_ARGS__); printf("\n"); GA_Sync(); } }
-#define debug(...) {}
+#define debug(...) { if(true) { printf("Rank %d: ", me); printf(__VA_ARGS__); printf("\n"); GA_Sync(); } }
 #define print(...) { printf(__VA_ARGS__); }
 
 #define   NDIM         2
@@ -125,7 +124,7 @@ int main(int argc, char* argv[]){
     fflush(stdout);
 
     // Random number generation
-    CRandomSFMT1 RanGen((int)time(NULL)); // Agner Combined generator
+    CRandomSFMT1 RanGen(time(0)+me*10); // Agner Combined generator
     // distribution for speciation events
     std::default_random_engine generator;
     std::binomial_distribution<int> speciation_distribution(size*size, specrate);
@@ -135,7 +134,6 @@ int main(int argc, char* argv[]){
 
         int zero = 0;
         double one = 1;
-        debug("starting Fill");
         GA_Fill(ga_land_grid, &one);
         GA_Fill(ga_land_mask, &zero);
         GA_Update_ghosts(ga_land_grid);
@@ -150,8 +148,6 @@ int main(int argc, char* argv[]){
         int inv_index = 0;
 
         for(int step = 0; step < timescale; step++) {
-
-            debug("Starting step %d", step);
 
             // speciation rule
             int speciation_event_count = speciation_distribution(generator);
@@ -182,18 +178,8 @@ int main(int argc, char* argv[]){
                 }
             }
 
-            //NGA_Release_update_ghosts(ga_land_grid);
-            //NGA_Release_update_ghosts(ga_land_mask);
-
-            debug("After speciation %d", step);
-
             GA_Update_ghosts(ga_land_grid);
-            GA_Update_ghosts(ga_land_mask);
-
-            debug("After update ghosts %d", step);
-
-            //NGA_Access_ghosts(ga_land_grid, ghost_dims, &ghost_grid_ptr, ghost_grid_ld);
-            //NGA_Access_ghosts(ga_land_mask, ghost_mask_dims, &ghost_mask_ptr, ghost_mask_ld);
+            //GA_Update_ghosts(ga_land_mask);
 
             // invasion rule
             std::vector<cell_update> updates;
@@ -233,8 +219,6 @@ int main(int argc, char* argv[]){
                 }
             }
 
-            debug("After invasion %d", step);
-
             for(const auto& [i, j, val] : updates) {
                 ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] = val;
                 bool unmask = true;
@@ -259,8 +243,6 @@ int main(int argc, char* argv[]){
                 }
             }
 
-            debug("After updates %d", step);
-
             // renormalize every nstep steps
             if(step%endtime == 0) {
                 cell_type land_grid_mean = 0;
@@ -278,12 +260,7 @@ int main(int argc, char* argv[]){
                         ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] /= land_grid_mean; // normalize grid
                     }
                 }
-
-                debug("After normalization %d", step);
             }
-
-            debug("Completed step %d", step);
-
         }
 
         rep_end_time = std::chrono::system_clock::now();

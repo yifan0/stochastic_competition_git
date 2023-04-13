@@ -10,5 +10,5 @@
 echo Tasks = ${SLURM_NTASKS}
 echo Nodes = ${SLURM_JOB_NUM_NODES}
 
-mpirun ./mpi_sim -s 500 -o test_mpi_0_
+mpirun ./build/mpi_sim -s 500 -o test_mpi_0_
 

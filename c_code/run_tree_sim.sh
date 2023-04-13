@@ -9,6 +9,6 @@
 
 for SIZE in {100..1000..100}
 do
-    ./tree_sim -s ${SIZE} -o test_sequential_tree_${SIZE}
+    ./build/tree_sim -s ${SIZE} -o test_sequential_tree_${SIZE}
 done
 
