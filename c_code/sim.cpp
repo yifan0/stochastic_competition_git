@@ -75,7 +75,6 @@ int main(int argc, char* argv[]){
         println("\tindividuals per patch = %f", 1/p)
         println("\tmutation size = %f", mutsize)
         println("\tspeciation rate = %f", specrate)
-        println("\tinvasion rate = %f", invrate)
         println("\ttimescale = %d", timescale)
         println("\tnsteps = %d", nsteps)
         println("\tend time = %d", endtime);
@@ -109,6 +108,7 @@ int main(int argc, char* argv[]){
         cell_type max = 1;
 
         for(int step = 0; step < timescale; step++) {
+            invrate = max*p/(max*p+min*(1-p));
 
             // speciation rule
             int speciation_event_count = speciation_distribution(generator);
@@ -228,7 +228,7 @@ int main(int argc, char* argv[]){
                 }
             }
 
-            // renormalize to prevent overflows
+            // renormalize only to prevent overflows
             if( std::numeric_limits<cell_type>::max() / (1+mutsize) < max ) {
                 float land_grid_mean = 0;
                 float tmp_sum = 0;
@@ -260,7 +260,7 @@ int main(int argc, char* argv[]){
 
         out_start_time = std::chrono::system_clock::now();
         FILE *fp;
-        outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".log";
+        outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".csv";
         fp = fopen(outfile.c_str(), "w");
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size-1; j++) {
