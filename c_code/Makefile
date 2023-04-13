@@ -5,7 +5,7 @@ CFLAGS=-I. -std=c++17 -O3 -Irandomc $(CXXOPTS)
 
 LD_FLAGS = $(GASNET_BACKEND_LIB_FLAGS)
 GA_INC=-I/home/ekoning2/scratch/ga/install/include
-GA_LINK=-L/home/ekoning2/scratch/ga/build/install/lib -L/home/ekoning2/scratch/ga/build/install/lib64 -lgfortran -lga -lga++ -llapack -lblas -larmci -lblas -lrt -lm
+GA_LINK=-L/home/ekoning2/scratch/ga/build/install/lib -L/home/ekoning2/scratch/ga/build/install/lib64 -lgfortran -lga
 
 EXEC=mpi_sim tree_sim ga_sim sim
 

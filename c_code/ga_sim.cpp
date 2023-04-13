@@ -57,7 +57,8 @@ int main(int argc, char* argv[]){
 
     MPI_Init(&argc, &argv);
     GA_Initialize();
-    if(! MA_init(C_DBL, stack, heap) ) GA_Error("MA_init failed",stack+heap);
+    char init_err_msg[] = "MA_init failed";
+    if(! MA_init(C_DBL, stack, heap) ) GA_Error(init_err_msg,stack+heap);
 
     me = GA_Nodeid();
     nprocs = GA_Nnodes();
@@ -79,7 +80,6 @@ int main(int argc, char* argv[]){
         MPI_Finalize();
         exit(0);
     }
-    outfile = result["outfile"].as<std::string>();
     size = result["size"].as<int>();
     nrep = result["reps"].as<int>();
 
@@ -94,25 +94,22 @@ int main(int argc, char* argv[]){
         dims[i] = size;
         ghost_width[i] = GHOSTS;
     }
-    int ga_land_grid = NGA_Create_ghosts(C_DBL, NDIM, dims, ghost_width, "land grid", NULL);
-    int ga_land_mask = NGA_Create_ghosts(C_INT, NDIM, dims, ghost_width, "land mask", NULL);
+    char land_grid_name[] = "land grid";
+    char land_mask_name[] = "land mask";
+    int ga_land_grid = NGA_Create_ghosts(C_DBL, NDIM, dims, ghost_width, land_grid_name, NULL);
+    int ga_land_mask = NGA_Create_ghosts(C_INT, NDIM, dims, ghost_width, land_mask_name, NULL);
 
     NGA_Distribution(ga_land_grid, me, lo, hi);
     NGA_Distribution(ga_land_mask, me, mask_lo, mask_hi);
     for(int i = 0; i < NDIM; i++) {
         if(lo[i] != mask_lo[i] || hi[i] != mask_hi[i]) {
-            GA_Error("Land grid and mask must have same distribution", 1);
+            char dist_err_msg[] = "Land grid and mask must have same distribution";
+            GA_Error(dist_err_msg, 1);
         }
     }
-
-    GA_Sync();
-    NGA_Update_ghosts(ga_land_grid);
-    NGA_Update_ghosts(ga_land_mask);
-
     NGA_Access(ga_land_grid, lo, hi, &land_grid_ptr, grid_ld);
     NGA_Access(ga_land_mask, mask_lo, mask_hi, &land_mask_ptr, mask_ld);
-    NGA_Access_ghosts(ga_land_grid, ghost_dims, &ghost_grid_ptr, ghost_grid_ld);
-    NGA_Access_ghosts(ga_land_mask, ghost_mask_dims, &ghost_mask_ptr, ghost_mask_ld);
+
 
     println("Inputs:")
         println("\trepetitions = %d", nrep)
@@ -141,6 +138,10 @@ int main(int argc, char* argv[]){
         debug("starting Fill");
         GA_Fill(ga_land_grid, &one);
         GA_Fill(ga_land_mask, &zero);
+        GA_Update_ghosts(ga_land_grid);
+        GA_Update_ghosts(ga_land_mask);
+        NGA_Access_ghosts(ga_land_grid, ghost_dims, &ghost_grid_ptr, ghost_grid_ld);
+        NGA_Access_ghosts(ga_land_mask, ghost_mask_dims, &ghost_mask_ptr, ghost_mask_ld);
 
         // invasion rule variables
         cell_type neighborhood[8];
@@ -156,10 +157,10 @@ int main(int argc, char* argv[]){
             int speciation_event_count = speciation_distribution(generator);
             std::set<int> spec_events;
             while(spec_events.size() < speciation_event_count) {
-                int index = rand() % ((hi[0]-lo[0])*(hi[1]-lo[1]));
+                int index = rand() % ((hi[0]-lo[0]+1)*(hi[1]-lo[1]+1));
                 if(!spec_events.count(index)) {
-                    int i = index % (hi[0]-lo[0]);
-                    int j = index / (hi[1]-lo[1]);
+                    int i = index % (hi[0]-lo[0]+1);
+                    int j = index / (hi[1]-lo[1]+1);
                     spec_events.insert(index);
                     int down = rand() % 2;
                     float ratio = (1+RanGen.Random()*mutsize);
@@ -168,18 +169,21 @@ int main(int argc, char* argv[]){
                     }
                     float probsuccess = p*ratio/(p*(ratio-1)+1);
                     if(RanGen.Random() <= probsuccess) {
-                        land_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] *= ratio;
-                        land_mask_ptr[(i+GHOSTS)*mask_ld[0]+j+GHOSTS] = true;
+                        ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] *= ratio;
+                        ghost_mask_ptr[(i+GHOSTS)*mask_ld[0]+j+GHOSTS] = true;
                         for(int x = -1; x < 1; x++) {
                             for(int y = -1; y <= 1; y++) {
                                 if((x != 0 || y != 0)) {
-                                    land_mask_ptr[ (i+x+GHOSTS)*mask_ld[0] + j+y + GHOSTS] = true;
+                                    ghost_mask_ptr[ (i+x+GHOSTS)*mask_ld[0] + j+y + GHOSTS] = true;
                                 }
                             }
                         }
                     }
                 }
             }
+
+            //NGA_Release_update_ghosts(ga_land_grid);
+            //NGA_Release_update_ghosts(ga_land_mask);
 
             debug("After speciation %d", step);
 
@@ -188,11 +192,14 @@ int main(int argc, char* argv[]){
 
             debug("After update ghosts %d", step);
 
+            //NGA_Access_ghosts(ga_land_grid, ghost_dims, &ghost_grid_ptr, ghost_grid_ld);
+            //NGA_Access_ghosts(ga_land_mask, ghost_mask_dims, &ghost_mask_ptr, ghost_mask_ld);
+
             // invasion rule
             std::vector<cell_update> updates;
-            for(int i = 0; i < hi[0]-lo[0]; i++) {
-                for(int j = 0; j < hi[1]-lo[1]; j++) {
-                    if(land_mask_ptr[i*mask_ld[0]+j]) {
+            for(int i = 0; i <= hi[0]-lo[0]; i++) {
+                for(int j = 0; j <= hi[1]-lo[1]; j++) {
+                    if(ghost_mask_ptr[(i+GHOSTS)*mask_ld[0]+j+GHOSTS] || i == 0 || i == hi[0]-lo[0] || j == 0 || j == hi[1]-lo[1]) {
                         double randval = RanGen.Random(); //random_float();
                         if(randval < invrate) {
                             inv_sum = 0;
@@ -201,8 +208,8 @@ int main(int argc, char* argv[]){
                                 for(int y = -1; y <= 1; y++) {
                                     if((x != 0 || y != 0)) {
 
-                                        neighborhood[inv_index] = land_grid_ptr[ (i+x)*grid_ld[0] + j+y ];
-                                        inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid_ptr[i*grid_ld[0]+j]*(1-p));
+                                        neighborhood[inv_index] = ghost_grid_ptr[(i+x+GHOSTS)*grid_ld[0]+j+y+GHOSTS];
+                                        inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS]*(1-p));
                                         inv_sum += inv[inv_index];
                                         inv_index++;
                                     }
@@ -217,7 +224,7 @@ int main(int argc, char* argv[]){
                                     weighted_rand -= inv[inv_index];
                                     inv_index++;
                                 }
-                                if(neighborhood[inv_index] != land_grid_ptr[i*grid_ld[0]+j]) {
+                                if(neighborhood[inv_index] != ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS]) {
                                     updates.push_back({i, j, neighborhood[inv_index]});
                                 }
                             }
@@ -229,7 +236,7 @@ int main(int argc, char* argv[]){
             debug("After invasion %d", step);
 
             for(const auto& [i, j, val] : updates) {
-                land_grid_ptr[i*grid_ld[0]+j] = val;
+                ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] = val;
                 bool unmask = true;
                 for(int x = -1; x < 1; x++) {
                     for(int y = -1; y <= 1; y++) {
@@ -238,7 +245,7 @@ int main(int argc, char* argv[]){
                             for(int xx = -1; xx < 1; xx++) {
                                 for(int yy = -1; yy <= 1; yy++) {
                                     if((xx != 0 || yy != 0)) {
-                                        if(land_grid_ptr[(i+x+xx)*grid_ld[0]+j+y+yy] != val) {
+                                        if(ghost_grid_ptr[(i+x+xx+GHOSTS)*grid_ld[0]+j+y+yy+GHOSTS] != val) {
                                             unmask = false;
                                             break;
                                         }
@@ -246,7 +253,7 @@ int main(int argc, char* argv[]){
                                 }
                                 if(!unmask) break;
                             }
-                            land_mask_ptr[(i+x)*mask_ld[0]+j+y] = !unmask;
+                            ghost_mask_ptr[(i+x+GHOSTS)*mask_ld[0]+j+y+GHOSTS] = !unmask;
                         }
                     }
                 }
@@ -258,17 +265,17 @@ int main(int argc, char* argv[]){
             if(step%endtime == 0) {
                 cell_type land_grid_mean = 0;
                 cell_type tmp_sum = 0;
-                for(int i = lo[0]; i < hi[0]; i++) {
-                    for(int j = lo[1]; j < hi[1]; j++) {
-                        tmp_sum += land_grid_ptr[i*grid_ld[0]+j];
+                for(int i = 0; i <= hi[0]-lo[0]; i++) {
+                    for(int j = 0; j <= hi[1]-lo[1]; j++) {
+                        tmp_sum += ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS];
                     }
                     land_grid_mean += tmp_sum/(size*size);
                     tmp_sum = 0;
                 }
                 MPI_Allreduce(MPI_IN_PLACE, &land_grid_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-                for(int i = lo[0]; i < hi[0] && false; i++) {
-                    for(int j = lo[1]; j < hi[1]; j++) {
-                        land_grid_ptr[i*grid_ld[0]+j] /= land_grid_mean; // normalize grid
+                for(int i = 0; i <= hi[0]-lo[0]; i++) {
+                    for(int j = 0; j < hi[1]-lo[1]; j++) {
+                        ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] /= land_grid_mean; // normalize grid
                     }
                 }
 
@@ -286,7 +293,7 @@ int main(int argc, char* argv[]){
 
         out_start_time = std::chrono::system_clock::now();
         FILE *fp;
-        outfile = outfile + std::to_string(rep) + ".log";
+        outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".log";
         fp = fopen(outfile.c_str(), "w");
         GA_Print_file(fp, ga_land_grid);
         fclose(fp);
