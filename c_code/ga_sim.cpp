@@ -85,10 +85,18 @@ int main(int argc, char* argv[]){
     timescale = 100*(size*1.0/p);
     endtime = timescale/nsteps;
 
+    // check that nprocs is a square to prevent errors
+    int sqrt_nprocs = sqrt(nprocs);
+    if(sqrt_nprocs*sqrt_nprocs != nprocs) {
+        println("Number of processes must form a square");
+        MPI_Finalize();
+        exit(0);
+    }
+
     start_time = std::chrono::system_clock::now();
 
     // grid for average across reps
-    GA_Mask_sync(1, 1); // turns on/off sync when updating ghosts. TODO: turn off for both before and after and check performance
+    GA_Mask_sync(1, 1); // turns off sync when updating ghosts
     for(int i = 0; i < NDIM; i++) {
         dims[i] = size;
         ghost_width[i] = GHOSTS;
@@ -260,6 +268,7 @@ int main(int argc, char* argv[]){
                         ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] /= land_grid_mean; // normalize grid
                     }
                 }
+                println("Normalized at step %d", step);
             }
         }
 
