@@ -107,7 +107,25 @@ int main(int argc, char* argv[]){
         cell_type min = 1;
         cell_type max = 1;
 
+        bool find_min = false;
+
         for(int step = 0; step < timescale; step++) {
+            if(find_min) {
+                cell_type old_min = min;
+                cell_type old_max = max;
+                min = land_grid[0][0];
+                max = land_grid[0][0];
+                for(int i = 0; i < size; i++) {
+                    for(int j = 0; j < size; j++) {
+                        if(land_grid[i][j] < min) min = land_grid[i][j];
+                        else if (land_grid[i][j] > max) max = land_grid[i][j];
+                    }
+                    if(min == old_min) {
+                        max = old_max;
+                        break;
+                    }
+                }
+            }
             invrate = max*p/(max*p+min*(1-p));
 
             // speciation rule
@@ -126,6 +144,20 @@ int main(int argc, char* argv[]){
                     }
                     float probsuccess = p*ratio/(p*(ratio-1)+1);
                     if(RanGen.Random() <= probsuccess) {
+                        if(land_grid[i][j] == min) {
+                            find_min = true;
+                            for(int x = -1; x < 1; x++) {
+                                for(int y = -1; y <= 1; y++) {
+                                    row = i+x;
+                                    col = j+y;
+                                    if(row >= size || row < 0)
+                                        row = (row+size)%size;
+                                    if(col >= size || col < 0)
+                                        col = (col+size)%size;
+                                    if(land_grid[row][col] == min) find_min = false;
+                                }
+                            }
+                        }
                         land_grid[i][j] *= ratio;
                         if(land_grid[i][j] > max) {
                             max = land_grid[i][j];
@@ -193,6 +225,20 @@ int main(int argc, char* argv[]){
             }
 
             for(const auto& [i, j, val] : updates) {
+                if(land_grid[i][j] == min) {
+                    find_min = true;
+                    for(int x = -1; x < 1; x++) {
+                        for(int y = -1; y <= 1; y++) {
+                            row = i+x;
+                            col = j+y;
+                            if(row >= size || row < 0)
+                                row = (row+size)%size;
+                            if(col >= size || col < 0)
+                                col = (col+size)%size;
+                            if(land_grid[row][col] == min) find_min = false;
+                        }
+                    }
+                }
                 land_grid[i][j] = val;
                 bool unmask = true;
                 for(int x = -1; x < 1; x++) {
