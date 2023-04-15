@@ -8,7 +8,7 @@
 #SBATCH --partition eng-instruction
 
 SIZE=500
-OUTPUT=test_sequential_${SIZE}_
+OUTPUT=test_sequential_${SIZE}
 module unload anaconda/2022-May/3
 cd build && make && cd ..
 /usr/bin/time -v ./build/sim -s ${SIZE} -o ${OUTPUT}
