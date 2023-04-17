@@ -24,6 +24,7 @@ plt.ylabel('Y-axis')
 
 # Save the figure as a PNG file with the same name as the CSV file
 plt.savefig(f"{filename[:-4]}.png")
+print(f"Saved figure: {filename[:-4]}.png")
 
 # Show the plot
 plt.show()
