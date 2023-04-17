@@ -62,8 +62,8 @@ int main(int argc, char* argv[]){
     // grid for average across reps
     cell_type land_grid_data[size*size];
     cell_type* land_grid[size];
-    bool land_mask_data[size*size];
-    bool* land_mask[size];
+    double land_mask_data[size*size];
+    double* land_mask[size];
     for(size_t i = 0; i < size; i++) {
         land_grid[i] = land_grid_data + i*size;
         land_mask[i] = land_mask_data + i*size;
@@ -87,6 +87,8 @@ int main(int argc, char* argv[]){
     std::default_random_engine generator;
     std::binomial_distribution<int> speciation_distribution(size*size, specrate);
 
+    // TODO: figure out why the output heatmap looks wrong. May have been wrong before latest commit
+
     for(int rep = 0; rep < nrep; rep++) {
         rep_start_time = std::chrono::system_clock::now();
 
@@ -107,29 +109,12 @@ int main(int argc, char* argv[]){
         cell_type min = 1;
         cell_type max = 1;
 
-        bool find_min = false;
-
         for(int step = 0; step < timescale; step++) {
-            if(find_min) {
-                cell_type old_min = min;
-                cell_type old_max = max;
-                min = land_grid[0][0];
-                max = land_grid[0][0];
-                for(int i = 0; i < size; i++) {
-                    for(int j = 0; j < size; j++) {
-                        if(land_grid[i][j] < min) min = land_grid[i][j];
-                        else if (land_grid[i][j] > max) max = land_grid[i][j];
-                    }
-                    if(min == old_min) {
-                        max = old_max;
-                        break;
-                    }
-                }
-            }
-            invrate = max*p/(max*p+min*(1-p));
-
             // speciation rule
             int speciation_event_count = speciation_distribution(generator);
+            if(speciation_event_count > 0) {
+                //println("Speciation events at step %d: %d", step, speciation_event_count);
+            }
             std::set<int> spec_events;
             while(spec_events.size() < speciation_event_count) {
                 int index = rand() % (size*size);
@@ -144,28 +129,16 @@ int main(int argc, char* argv[]){
                     }
                     float probsuccess = p*ratio/(p*(ratio-1)+1);
                     if(RanGen.Random() <= probsuccess) {
-                        if(land_grid[i][j] == min) {
-                            find_min = true;
-                            for(int x = -1; x < 1; x++) {
-                                for(int y = -1; y <= 1; y++) {
-                                    row = i+x;
-                                    col = j+y;
-                                    if(row >= size || row < 0)
-                                        row = (row+size)%size;
-                                    if(col >= size || col < 0)
-                                        col = (col+size)%size;
-                                    if(land_grid[row][col] == min) find_min = false;
-                                }
-                            }
-                        }
+                        cell_type old_val = land_grid[i][j];
                         land_grid[i][j] *= ratio;
+                        //println("Step %d speciation %f to %f", step, old_val, land_grid[i][j]);
                         if(land_grid[i][j] > max) {
                             max = land_grid[i][j];
                         }
                         if(land_grid[i][j] < min) {
                             min = land_grid[i][j];
                         }
-                        for(int x = -1; x < 1; x++) {
+                        for(int x = -1; x <= 1; x++) {
                             for(int y = -1; y <= 1; y++) {
                                 // wrap around
                                 row = i+x;
@@ -174,7 +147,13 @@ int main(int argc, char* argv[]){
                                     row = (row+size)%size;
                                 if(col >= size || col < 0)
                                     col = (col+size)%size;
-                                land_mask[row][col] = true;
+                                cell_type local_max = land_grid[row][col];
+                                for(int xx = -1; xx <= 1; xx++) {
+                                    for(int yy = -1; yy <= 1; yy++) {
+                                        local_max = std::max(local_max, land_grid[(row+xx+size)%size][(col+yy+size)%size]);
+                                    }
+                                }
+                                land_mask[row][col] = 1; //local_max*p/(local_max*p+land_grid[row][col]*(1-p));
                             }
                         }
                     }
@@ -185,20 +164,16 @@ int main(int argc, char* argv[]){
             std::vector<cell_update> updates;
             for(int i = 0; i < size; i++) {
                 for(int j = 0; j < size; j++) {
-                    if(land_mask[i][j]) {
+                    if(land_mask[i][j] != 0) {
                         double randval = RanGen.Random(); //random_float();
-                        if(randval < invrate) {
+                        if(randval < land_mask[i][j]) {
                             inv_sum = 0;
                             inv_index = 0;
-                            for(int x = -1; x < 1; x++) {
+                            for(int x = -1; x <= 1; x++) {
                                 for(int y = -1; y <= 1; y++) {
                                     if((x != 0 || y != 0)) {
-                                        row = i+x;
-                                        col = j+y;
-                                        if(row >= size || row < 0)
-                                            row = (row+size)%size;
-                                        if(col >= size || col < 0)
-                                            col = (col+size)%size;
+                                        row = (i+x+size)%size;
+                                        col = (j+y+size)%size;
                                         neighborhood[inv_index] = land_grid[row][col];
                                         inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
                                         inv_sum += inv[inv_index];
@@ -225,50 +200,27 @@ int main(int argc, char* argv[]){
             }
 
             for(const auto& [i, j, val] : updates) {
-                if(land_grid[i][j] == min) {
-                    find_min = true;
-                    for(int x = -1; x < 1; x++) {
-                        for(int y = -1; y <= 1; y++) {
-                            row = i+x;
-                            col = j+y;
-                            if(row >= size || row < 0)
-                                row = (row+size)%size;
-                            if(col >= size || col < 0)
-                                col = (col+size)%size;
-                            if(land_grid[row][col] == min) find_min = false;
-                        }
-                    }
-                }
                 land_grid[i][j] = val;
-                bool unmask = true;
-                for(int x = -1; x < 1; x++) {
+                for(int x = -1; x <= 1; x++) {
                     for(int y = -1; y <= 1; y++) {
-                        if((x != 0 || y != 0)) {
-                            bool unmask = true;
-                            for(int xx = -1; xx < 1; xx++) {
-                                for(int yy = -1; yy <= 1; yy++) {
-                                    row = i+x+xx;
-                                    col = j+y+yy;
-                                    if(row >= size || row < 0)
-                                        row = (i+x+xx+size)%size;
-                                    if(col >= size || col < 0)
-                                        col = (j+y+yy+size)%size;
-                                    if((xx != 0 || yy != 0)) {
-                                        if(land_grid[row][col] != val) {
-                                            unmask = false;
-                                            break;
-                                        }
-                                    }
+                        // if not in isolation, calculate the invrate
+                        cell_type local_max = 0;
+                        for(int xx = -1; xx <= 1; xx++) {
+                            for(int yy = -1; yy <= 1; yy++) {
+                                row = (i+x+xx+size)%size;
+                                col = (j+y+yy+size)%size;
+                                if(land_grid[row][col] != val && land_grid[row][col] > local_max) {
+                                    local_max = land_grid[row][col];
                                 }
-                                if(!unmask) break;
                             }
-                            row = i+x;
-                            col = j+y;
-                            if(row >= size || row < 0)
-                                row = (row+size)%size;
-                            if(col >= size || col < 0)
-                                col = (col+size)%size;
-                            land_mask[row][col] = !unmask;
+                        }
+                        row = (i+x+size)%size;
+                        col = (j+y+size)%size;
+                        if(local_max == 0) {
+                            land_mask[row][col] = 0; // TODO: sometimes this is happening when it shouldn't
+                        }
+                        else {
+                            land_mask[row][col] = 1; //local_max*p/(local_max*p+land_grid[row][col]*(1-p));
                         }
                     }
                 }
@@ -295,6 +247,10 @@ int main(int argc, char* argv[]){
                     }
                 }
                 println("Normalized at step %d", step);
+            }
+
+            if(step%endtime == 0) {
+                println("Progress: %d%%", step/endtime);
             }
 
         }
