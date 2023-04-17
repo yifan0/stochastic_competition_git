@@ -179,7 +179,7 @@ int main(int argc, char* argv[]){
                         i++; j++; // to account for ghost cells
                         land_grid[i][j] *= ratio;
                         land_mask[i][j] = true;
-                        for(int x = -1; x < 1; x++) {
+                        for(int x = -1; x <= 1; x++) {
                             for(int y = -1; y <= 1; y++) {
                                 land_mask[i+x][j+y] = true;
                             }
@@ -276,12 +276,12 @@ int main(int argc, char* argv[]){
                     MPI_Put(&land_grid[i][j], 1, MPI_DOUBLE, right_proc, (proc_cols[right_proc]+2)*(i), 1, MPI_DOUBLE, win);
                 }
                 bool unmask = true;
-                for(int x = -1; x < 1; x++) {
+                for(int x = -1; x <= 1; x++) {
                     for(int y = -1; y <= 1; y++) {
                         if((x != 0 || y != 0) && i+x >= 0 && i+x < rows+1 && j+y >= 0 && j+y < cols+1) {
                             bool unmask = true;
                             if(land_grid[i+x][j+x] != val) { unmask = false; }
-                            for(int xx = -1; xx < 1; xx++) {
+                            for(int xx = -1; xx <= 1; xx++) {
                                 for(int yy = -1; yy <= 1; yy++) {
                                     if((xx != 0 || yy != 0) && i+x+xx >= 0 && i+x+xx < rows+1 && j+y+yy >= 0 && j+y+yy < cols+1) {
                                         if(land_grid[i+x+xx][j+y+yy] != val) {
