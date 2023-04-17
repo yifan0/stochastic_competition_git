@@ -87,8 +87,6 @@ int main(int argc, char* argv[]){
     std::default_random_engine generator;
     std::binomial_distribution<int> speciation_distribution(size*size, specrate);
 
-    // TODO: figure out why the output heatmap looks wrong. May have been wrong before latest commit
-
     for(int rep = 0; rep < nrep; rep++) {
         rep_start_time = std::chrono::system_clock::now();
 
@@ -112,9 +110,6 @@ int main(int argc, char* argv[]){
         for(int step = 0; step < timescale; step++) {
             // speciation rule
             int speciation_event_count = speciation_distribution(generator);
-            if(speciation_event_count > 0) {
-                //println("Speciation events at step %d: %d", step, speciation_event_count);
-            }
             std::set<int> spec_events;
             while(spec_events.size() < speciation_event_count) {
                 int index = rand() % (size*size);
@@ -129,9 +124,7 @@ int main(int argc, char* argv[]){
                     }
                     float probsuccess = p*ratio/(p*(ratio-1)+1);
                     if(RanGen.Random() <= probsuccess) {
-                        cell_type old_val = land_grid[i][j];
                         land_grid[i][j] *= ratio;
-                        //println("Step %d speciation %f to %f", step, old_val, land_grid[i][j]);
                         if(land_grid[i][j] > max) {
                             max = land_grid[i][j];
                         }
@@ -153,7 +146,7 @@ int main(int argc, char* argv[]){
                                         local_max = std::max(local_max, land_grid[(row+xx+size)%size][(col+yy+size)%size]);
                                     }
                                 }
-                                land_mask[row][col] = 1; //local_max*p/(local_max*p+land_grid[row][col]*(1-p));
+                                land_mask[row][col] = local_max*p/(local_max*p+land_grid[row][col]*(1-p));
                             }
                         }
                     }
@@ -217,10 +210,10 @@ int main(int argc, char* argv[]){
                         row = (i+x+size)%size;
                         col = (j+y+size)%size;
                         if(local_max == 0) {
-                            land_mask[row][col] = 0; // TODO: sometimes this is happening when it shouldn't
+                            land_mask[row][col] = 0;
                         }
                         else {
-                            land_mask[row][col] = 1; //local_max*p/(local_max*p+land_grid[row][col]*(1-p));
+                            land_mask[row][col] = local_max*p/(local_max*p+land_grid[row][col]*(1-p));
                         }
                     }
                 }
