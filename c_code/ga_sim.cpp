@@ -175,7 +175,7 @@ int main(int argc, char* argv[]){
                     if(RanGen.Random() <= probsuccess) {
                         ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] *= ratio;
                         ghost_mask_ptr[(i+GHOSTS)*mask_ld[0]+j+GHOSTS] = true;
-                        for(int x = -1; x < 1; x++) {
+                        for(int x = -1; x <= 1; x++) {
                             for(int y = -1; y <= 1; y++) {
                                 if((x != 0 || y != 0)) {
                                     ghost_mask_ptr[ (i+x+GHOSTS)*mask_ld[0] + j+y + GHOSTS] = true;
@@ -198,7 +198,7 @@ int main(int argc, char* argv[]){
                         if(randval < invrate) {
                             inv_sum = 0;
                             inv_index = 0;
-                            for(int x = -1; x < 1; x++) {
+                            for(int x = -1; x <= 1; x++) {
                                 for(int y = -1; y <= 1; y++) {
                                     if((x != 0 || y != 0)) {
 
@@ -230,11 +230,11 @@ int main(int argc, char* argv[]){
             for(const auto& [i, j, val] : updates) {
                 ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] = val;
                 bool unmask = true;
-                for(int x = -1; x < 1; x++) {
+                for(int x = -1; x <= 1; x++) {
                     for(int y = -1; y <= 1; y++) {
                         if((x != 0 || y != 0)) {
                             bool unmask = true;
-                            for(int xx = -1; xx < 1; xx++) {
+                            for(int xx = -1; xx <= 1; xx++) {
                                 for(int yy = -1; yy <= 1; yy++) {
                                     if((xx != 0 || yy != 0)) {
                                         if(ghost_grid_ptr[(i+x+xx+GHOSTS)*grid_ld[0]+j+y+yy+GHOSTS] != val) {
