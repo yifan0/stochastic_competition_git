@@ -252,19 +252,17 @@ int main(int argc, char* argv[]){
             }
 
             // renormalize every nstep steps
-            if(step%endtime == 0) {
+            if(step%endtime == endtime-1) {
                 cell_type land_grid_mean = 0;
-                cell_type tmp_sum = 0;
                 for(int i = 0; i <= hi[0]-lo[0]; i++) {
                     for(int j = 0; j <= hi[1]-lo[1]; j++) {
-                        tmp_sum += ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS];
+                        land_grid_mean += ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS];
                     }
-                    land_grid_mean += tmp_sum/(size*size);
-                    tmp_sum = 0;
                 }
+                land_grid_mean /= (size*size);
                 MPI_Allreduce(MPI_IN_PLACE, &land_grid_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
                 for(int i = 0; i <= hi[0]-lo[0]; i++) {
-                    for(int j = 0; j < hi[1]-lo[1]; j++) {
+                    for(int j = 0; j <= hi[1]-lo[1]; j++) {
                         ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] /= land_grid_mean; // normalize grid
                     }
                 }
