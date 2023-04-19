@@ -96,7 +96,7 @@ int main(int argc, char* argv[]){
     start_time = std::chrono::system_clock::now();
 
     // grid for average across reps
-    GA_Mask_sync(1, 1); // turns off sync when updating ghosts
+    GA_Mask_sync(0, 0); // turns off sync when updating ghosts
     for(int i = 0; i < NDIM; i++) {
         dims[i] = size;
         ghost_width[i] = GHOSTS;
@@ -186,7 +186,8 @@ int main(int argc, char* argv[]){
                 }
             }
 
-            GA_Update_ghosts(ga_land_grid);
+            if(step%10 == 0)
+                GA_Update_ghosts(ga_land_grid);
             //GA_Update_ghosts(ga_land_mask);
 
             // invasion rule
