@@ -12,9 +12,9 @@ OUTPUT=test_ga_${SIZE}_${SLURM_JOB_NUM_NODES}_${SLURM_NTASKS}
 echo Tasks = ${SLURM_NTASKS}
 echo Nodes = ${SLURM_JOB_NUM_NODES}
 
-#mpirun ./build/ga_sim -s ${SIZE} -o ${OUTPUT}
+mpirun ./build/ga_sim -s ${SIZE} -o ${OUTPUT}
 
-module load python/3.10.4
+module load anaconda3_cpu/4.13.0
 python reformat_ga_matrix.py ${OUTPUT}_rep0.log
 python heatmap.py ${OUTPUT}_rep0.csv
 
