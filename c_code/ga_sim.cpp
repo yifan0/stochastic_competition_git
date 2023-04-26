@@ -268,7 +268,6 @@ int main(int argc, char* argv[]){
                         ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] /= land_grid_mean; // normalize grid
                     }
                 }
-                println("Normalized at step %d", step);
 
 		outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_checkpoint" + std::to_string((int)floor(step/endtime)) + ".log";
 		fp = fopen(outfile.c_str(), "w");
