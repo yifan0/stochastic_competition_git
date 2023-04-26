@@ -53,6 +53,7 @@ int main(int argc, char* argv[]){
     double* land_grid_ptr, *ghost_grid_ptr;
     int* land_mask_ptr, *ghost_mask_ptr;
     int heap=3000000, stack=3000000; // TODO: find out if these are good values
+    FILE *fp;
 
     MPI_Init(&argc, &argv);
     GA_Initialize();
@@ -268,6 +269,12 @@ int main(int argc, char* argv[]){
                     }
                 }
                 println("Normalized at step %d", step);
+
+		outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_checkpoint" + std::to_string((int)floor(step/endtime)) + ".log";
+		fp = fopen(outfile.c_str(), "w");
+		GA_Print_file(fp, ga_land_grid);
+		fclose(fp);
+		println("Output with progress %d% (step = %d) to file %s", step/endtime, step, outfile.c_str());
             }
         }
 
@@ -277,7 +284,6 @@ int main(int argc, char* argv[]){
         fflush(stdout);
 
         out_start_time = std::chrono::system_clock::now();
-        FILE *fp;
         outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".log";
         fp = fopen(outfile.c_str(), "w");
         GA_Print_file(fp, ga_land_grid);
