@@ -14,11 +14,6 @@ From `c_code` directory, build by running:
 - Code: sim.cpp
 - Executable: sim
 
-## Parallel with MPI
-
-- Code: mpi\_sim.cpp
-- Executable: mpi\_sim
-
 ## Parallel with GlobalArrays
 
 - Code: ga\_sim.cpp
