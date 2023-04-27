@@ -69,7 +69,7 @@ int main(int argc, char* argv[]){
         ("s,size", "grid size", cxxopts::value<int>()->default_value("500"))
         ("specrate", "speciation rate", cxxopts::value<double>()->default_value("0.0001"))
         ("r,reps", "number of repetitions", cxxopts::value<int>()->default_value("1"))
-        ("m,mutsize", "maximum change in mutation event", cxxopts::value<int>()->default_value("0.1"))
+        ("m,mutsize", "maximum change in mutation event", cxxopts::value<double>()->default_value("0.1"))
         ("o,outfile", "output file prefix", cxxopts::value<std::string>()->default_value("out"))
         ("h,help", "Print usage")
         ;
@@ -85,7 +85,7 @@ int main(int argc, char* argv[]){
     size = result["size"].as<int>();
     nrep = result["reps"].as<int>();
     specrate = result["specrate"].as<double>();
-    mutsize = result["mutsize"].as<int>();
+    mutsize = result["mutsize"].as<double>();
 
     timescale = 100*(size*1.0/p);
     endtime = timescale/nsteps;
