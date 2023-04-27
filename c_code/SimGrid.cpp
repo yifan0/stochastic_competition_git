@@ -13,24 +13,35 @@ class SimRow {
         T* data;
         SimGrid<T>* grid;
         size_t row;
-	bool ghost;
+        bool ghost;
 
     public:
         SimRow(T* data_, size_t row_, SimGrid<T>* grid_) : data(data_), row(row_), grid(grid_) {
-		ghost = row < grid->ghosts || row > grid->local_rows-grid->ghosts;
-	}
+            ghost = row < grid->ghosts || row > grid->local_rows-grid->ghosts;
+        }
+        
+        SimRow() {
+            data = nullptr;
+            row = 0;
+            grid = nullptr;
+            ghost = false;
+        }
 
         // Subscript operator
         T& operator[](size_t i) const {
             return data[i];
         }
-        
+
         // Subscript operator
         T& operator[](size_t i) {
             if(ghost || i < grid->ghosts || i > grid->local_cols-grid->ghosts) {
-                grid->updateGhost(row,i);
+                //grid->updateGhost(row,i);
             }
             return data[i];
+        }
+
+        T* getData() {
+            return data;
         }
 };
 
@@ -51,7 +62,7 @@ class SimGrid {
         int rank, nprocs;    // MPI rank and comm size
         int sqrt_nprocs;    // sqrt of the number of processes
         MPI_Comm cart_comm; // cartesian topology communicator
-	MPI_Win window;     // window
+        MPI_Win window;     // window
 
         /*
          * Update remote element at (i,j) where i is the relative row and j is the relative column.
@@ -86,7 +97,7 @@ class SimGrid {
             MPI_Aint offset = i*(proc_cols[send_to]+2)+j+1;
 
             // Send to remote proc
-	    MPI_Put(&rows[i][j], sizeof(T), MPI_BYTE, send_to, offset, sizeof(T), MPI_BYTE, window);
+            MPI_Put(&rows[i][j], sizeof(T), MPI_BYTE, send_to, offset, sizeof(T), MPI_BYTE, window);
         }
 
     public:
@@ -135,23 +146,35 @@ class SimGrid {
             for (size_t i = 0; i < local_rows; ++i) {
                 rows[i] = SimRow<T>(data + (i+ghosts)*(local_cols+2*ghosts) + ghosts, i, this);
             }
-            
+
             // Create cartesian topology
             int dim[2] = {proc_grid_rows, proc_grid_cols};
             int periods[2] = {1,1};
             MPI_Cart_create(MPI_COMM_WORLD, 2, dim, periods, 1, &cart_comm);
 
-	    // Create MPI Window
-	    MPI_Win_create(data, ((local_rows + 2*ghosts) * (local_cols + 2*ghosts))*sizeof(T), sizeof(T), MPI_INFO_NULL, MPI_COMM_WORLD, &window);
+            // Create MPI Window
+            MPI_Win_create(data, ((local_rows + 2*ghosts) * (local_cols + 2*ghosts))*sizeof(T), sizeof(T), MPI_INFO_NULL, MPI_COMM_WORLD, &window);
 
         }
 
         // Destructor
         ~SimGrid() {
+            MPI_Win_free(&window);
             delete[] data;
             delete[] rows;
             delete proc_rows;
             delete proc_cols;
+        }
+
+        size_t getRows() { return local_rows; }
+        size_t getCols() { return local_cols; }
+
+        // TODO: function for output to file
+
+        void sync() {
+            if(ghosts > 0) {
+                MPI_Win_fence(0, window);
+            }
         }
 
         // Subscript operator for rows
