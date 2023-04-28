@@ -273,11 +273,11 @@ int main(int argc, char* argv[]){
                     }
                 }
 
-		outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_checkpoint" + std::to_string((int)floor(step/endtime)) + ".log";
-		fp = fopen(outfile.c_str(), "w");
-		GA_Print_file(fp, ga_land_grid);
-		fclose(fp);
-		println("Output with progress %d% (step = %d) to file %s", step/endtime, step, outfile.c_str());
+                outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_checkpoint" + std::to_string((int)floor(step/endtime)) + ".csv";
+                fp = fopen(outfile.c_str(), "w");
+                GA_Print_csv_file(fp, ga_land_grid);
+                fclose(fp);
+                println("Output with progress %d% (step = %d) to file %s", step/endtime, step, outfile.c_str());
             }
         }
 
@@ -287,9 +287,9 @@ int main(int argc, char* argv[]){
         fflush(stdout);
 
         out_start_time = std::chrono::system_clock::now();
-        outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".log";
+        outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".csv";
         fp = fopen(outfile.c_str(), "w");
-        GA_Print_file(fp, ga_land_grid);
+        GA_Print_csv_file(fp, ga_land_grid);
         fclose(fp);
         out_end_time = std::chrono::system_clock::now();
         std::chrono::duration<double> out_time = out_end_time - out_start_time;

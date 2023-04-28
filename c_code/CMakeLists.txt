@@ -9,8 +9,7 @@ set(ENABLE_FORTRAN OFF)
 include(FetchContent)
 FetchContent_Declare(
     globalarrays
-    GIT_REPOSITORY https://github.com/GlobalArrays/ga.git
-    GIT_TAG "v5.8.2"
+    GIT_REPOSITORY https://github.com/kodingkoning/ga.git
 )
 FetchContent_MakeAvailable(globalarrays)
 

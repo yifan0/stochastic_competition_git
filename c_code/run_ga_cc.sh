@@ -2,7 +2,7 @@
 #SBATCH --job-name=ga_sim    # Job name
 #SBATCH --time=01:00:00                 # Time limit hrs:min:sec
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
+#SBATCH --ntasks-per-node=16
 #SBATCH --output=logs/test_ga_%j.log   # Standard output and error log
 #SBATCH --partition eng-instruction 
 
@@ -17,6 +17,5 @@ echo Nodes = ${SLURM_JOB_NUM_NODES}
 mpirun ./build/ga_sim -s ${SIZE} -o ${OUTPUT}
 
 module load anaconda/2022-May/3
-python reformat_ga_matrix.py ${OUTPUT}_rep0.log
 python heatmap.py ${OUTPUT}_rep0.csv
 
