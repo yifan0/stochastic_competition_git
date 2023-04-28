@@ -23,6 +23,7 @@ set(targets
     tree_sim
     ga_sim
     test_tree
+    benchmark
 )
 
 foreach(TARGET ${targets})

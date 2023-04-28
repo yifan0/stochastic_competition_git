@@ -19,3 +19,10 @@ From `c_code` directory, build by running:
 - Code: ga\_sim.cpp
 - Executable: ga\_sim
 
+# Sequential Benchmark
+
+- Code: benchmark.cpp
+- Executable: benchmark
+- Provides timing baseline. Executes steps similar to those of the simulation, but without interleaving them, providing a breakdown of required time.
+
+
