@@ -15,88 +15,11 @@
 #include "sfmt.h"
 #include "sfmt.cpp"
 #include "userintf.cpp"
+#include "tree.cpp"
 using namespace std;
 
 #define println(...) { printf(__VA_ARGS__); printf("\n"); }
 #define print(...) { printf(__VA_ARGS__); }
-
-#define USAGE \
-"tree_sim gridsize nreps outfile"
-
-#define HELPTEXT \
-"Simulate plant spread on grid\n\
-    gridsize : number of cells along an edge of the grid\n\
-    nreps : number of repetitions of the simulation\n\
-    outfile : output file name\n"
-
-typedef double cell_type;
-
-struct speciation_tree_node {
-    cell_type val;
-    size_t i;
-    size_t j;
-    size_t time;
-    vector<speciation_tree_node*> children;
-    speciation_tree_node(cell_type v, size_t t, size_t x, size_t y) : val(v), time(t), i(x), j(y) {
-    }
-};
-
-typedef std::tuple<int, int, speciation_tree_node*> cell_update;
-
-speciation_tree_node* find_node(speciation_tree_node* root, cell_type target) {
-    if(root->val == target) {
-        return root;
-    }
-
-    for(auto child : root->children) {
-        speciation_tree_node* result = find_node(child, target);
-        if(result != nullptr) return result;
-    }
-
-    return nullptr;
-}
-
-// caller is responsible for adding a semicolon at the end
-string toString(speciation_tree_node* root) {
-    // for a leaf, just return the label
-    if(root->children.size() == 0) {
-        return std::to_string(root->val);
-    }
-
-    // for a parent, group the children in () and add label
-    string output = "(";
-    for(int i = 0; i < root->children.size(); i++) {
-        output += toString(root->children[i]);
-        if(i < root->children.size()-1) output += ",";
-    }
-    output += ")";
-    output += std::to_string(root->val);
-    return output;
-}
-
-void delete_tree(speciation_tree_node* root) {
-    if(root == nullptr) return;
-    for(auto child : root->children) {
-        delete_tree(child);
-    }
-    delete root;
-}
-
-size_t get_depth(speciation_tree_node* root) {
-    if(root == nullptr) return 0;
-    size_t depth = 0;
-    for(auto child : root->children) {
-        depth = max(depth, get_depth(child));
-    }
-    return depth+1;
-}
-
-void normalize(speciation_tree_node* root, cell_type avg) {
-    root->val = root->val/avg;
-    for(auto child : root->children) {
-        normalize(child, avg);
-    }
-}
 
 int main(int argc, char* argv[]){
     int nrep = 10;
@@ -110,7 +33,7 @@ int main(int argc, char* argv[]){
     int nsteps = 100;
     int endtime = timescale/nsteps;
     std::string outfile;
-    std::chrono::time_point<std::chrono::system_clock> start_time, end_time, rep_start_time, rep_end_time, out_start_time, out_end_time;
+    std::chrono::time_point<std::chrono::system_clock> start_time, end_time, rep_start_time, rep_end_time, summary_start_time, summary_end_time, out_start_time, out_end_time;
 
     cxxopts::Options options("tree_sim", "Stocastic competition simulation generating a species tree");
 
@@ -118,7 +41,7 @@ int main(int argc, char* argv[]){
         ("s,size", "grid size", cxxopts::value<int>()->default_value("500"))
         ("r,reps", "number of repetitions", cxxopts::value<int>()->default_value("1"))
         ("specrate", "speciation rate", cxxopts::value<double>()->default_value("0.0001"))
-        ("m,mutsize", "maximum change in mutation event", cxxopts::value<int>()->default_value("0.1"))
+        ("m,mutsize", "maximum change in mutation event", cxxopts::value<double>()->default_value("0.1"))
         ("o,outfile", "output file name", cxxopts::value<std::string>()->default_value("out.csv"))
         ("h,help", "Print usage")
     ;
@@ -133,7 +56,7 @@ int main(int argc, char* argv[]){
     size = result["size"].as<int>();
     nrep = result["reps"].as<int>();
     specrate = result["specrate"].as<double>();
-    mutsize = result["mutsize"].as<int>();
+    mutsize = result["mutsize"].as<double>();
 
     timescale = 100*(size*1.0/p);
     endtime = timescale/nsteps;
@@ -175,11 +98,13 @@ int main(int argc, char* argv[]){
         rep_start_time = std::chrono::system_clock::now();
 
         // speciation rule variables
-        speciation_tree_node* speciation_root = new speciation_tree_node(1, 0, 0, 0); // root has value 1, the starting value
+        speciation_tree_node* speciation_root = new speciation_tree_node(1, 0, nullptr); // root has value 1, the starting value
+        speciation_tree_node* starting_value = new speciation_tree_node(1, 0, speciation_root);
+        speciation_root->left_child = starting_value;
 
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size; j++) {
-                land_grid[i][j] = speciation_root;
+                land_grid[i][j] = starting_value;
                 land_mask[i][j] = 0;
             }
         }
@@ -209,8 +134,8 @@ int main(int argc, char* argv[]){
                     if(RanGen.Random() <= probsuccess) {
                         speciation_tree_node* parent = land_grid[i][j];
 
-                        land_grid[i][j] = new speciation_tree_node(parent->val*ratio, step, i, j);
-                        parent->children.push_back(land_grid[i][j]);
+                        land_grid[i][j] = new speciation_tree_node(parent->val*ratio, step, nullptr);
+                        speciation_event(parent, land_grid[i][j]);
                         land_mask[i][j] = true;
                         for(int x = -1; x < 1; x++) {
                             for(int y = -1; y <= 1; y++) {
@@ -303,10 +228,17 @@ int main(int argc, char* argv[]){
                 normalize(speciation_root, average);
             }
         }
+        
+        rep_end_time = std::chrono::system_clock::now();
+        std::chrono::duration<double> rep_time = rep_end_time - rep_start_time;
+        println("Rep %d run time = %fs", rep, rep_time.count());
+        fflush(stdout);
+
+        summary_start_time = std::chrono::system_clock::now();
 
         // Calculate summary statistics
         // TODO: optimize 
-        for(size_t summary_size = 16; summary_size < size; summary_size << 1) {
+        for(size_t summary_size = 16; summary_size < size; summary_size = summary_size << 1) {
             // Statistics:
             //  1. Number of unique species
             //  2. Effective Population
@@ -376,30 +308,38 @@ int main(int argc, char* argv[]){
 
         }
 
-        rep_end_time = std::chrono::system_clock::now();
-        std::chrono::duration<double> rep_time = rep_end_time - rep_start_time;
-        println("Rep %d run time = %fs", rep, rep_time.count());
+        summary_end_time = std::chrono::system_clock::now();
+        std::chrono::duration<double> summary_time = summary_end_time - summary_start_time;
+        println("Rep %d summary time = %fs", rep, summary_time.count());
         fflush(stdout);
 
         out_start_time = std::chrono::system_clock::now();
+        set<speciation_tree_node*> species;
         FILE *fp;
-        outfile = argv[3] + std::to_string(rep) + ".log";
+        outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".log";
         fp = fopen(outfile.c_str(), "w");
         for(int i = 0; i < size; i++) {
             for(int j = 0; j < size-1; j++) {
                 fprintf(fp, "%f", land_grid[i][j]->val);
                 fprintf(fp, ", ");
+                species.insert(land_grid[i][j]);
             }
             fprintf(fp, "%f\n", land_grid[i][size-1]->val);
+            species.insert(land_grid[i][size-1]);
         }
         fclose(fp);
+        println("Wrote results to file %s", outfile.c_str());
 
-        outfile += std::to_string(rep) + ".tree";
+        outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".tree";
         fp = fopen(outfile.c_str(), "w");
+        println("Depth of tree before pruning = %d", get_depth(speciation_root));
+        prune(speciation_root, species);
         string output_tree = toString(speciation_root);
         fprintf(fp, "%s;", output_tree.c_str());
+        println("Unique species = %d", species.size());
         println("Depth of tree = %d", get_depth(speciation_root));
         fclose(fp);
+        println("Tree output to %s", outfile.c_str());
         delete_tree(speciation_root);
 
         out_end_time = std::chrono::system_clock::now();
@@ -411,7 +351,6 @@ int main(int argc, char* argv[]){
     end_time = std::chrono::system_clock::now();
     std::chrono::duration<double> total_time = end_time - start_time;
     println("Total run time = %fs", total_time.count());
-    println("Wrote reuslts to file %s", outfile.c_str());
     fflush(stdout);
 }
 

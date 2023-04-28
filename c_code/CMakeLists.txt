@@ -22,6 +22,7 @@ set(targets
     omp_sim
     tree_sim
     ga_sim
+    test_tree
 )
 
 foreach(TARGET ${targets})
