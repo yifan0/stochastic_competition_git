@@ -138,9 +138,10 @@ int main(int argc, char* argv[]){
 
     // Random number generation
     CRandomSFMT1 RanGen(time(0)+me*10); // Agner Combined generator
+    int local_area = (hi[0]-lo[0]+1)*(hi[1]-lo[1]+1);
     // distribution for speciation events
     std::default_random_engine generator;
-    std::binomial_distribution<int> speciation_distribution(size*size, specrate);
+    std::binomial_distribution<int> speciation_distribution(local_area, specrate);
 
     for(int rep = 0; rep < nrep; rep++) {
         rep_start_time = std::chrono::system_clock::now();
