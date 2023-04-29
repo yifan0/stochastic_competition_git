@@ -14,13 +14,11 @@ filename = sys.argv[1]
 data = pd.read_csv(filename)
 
 # Create a heatmap using Matplotlib
-plt.imshow(data, cmap='coolwarm', interpolation='antialiased')
+#plt.imshow(data, cmap='coolwarm', interpolation='antialiased')
+plt.pcolor(data, cmap=plt.cm.seismic, vmin=0, vmax=2)
 plt.colorbar()
 
 # Set the title and labels
-plt.title('Heatmap')
-plt.xlabel('X-axis')
-plt.ylabel('Y-axis')
 
 # Save the figure as a PNG file with the same name as the CSV file
 plt.savefig(f"{filename[:-4]}.png")
