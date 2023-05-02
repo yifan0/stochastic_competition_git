@@ -1,5 +1,5 @@
 #include <cstdio>
-#include <string.h>
+#include <string>
 #include <tuple>
 #include <set>
 using namespace std;
