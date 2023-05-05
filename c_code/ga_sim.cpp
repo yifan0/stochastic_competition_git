@@ -67,7 +67,7 @@ int main(int argc, char* argv[]){
 
     options.add_options()
         ("s,size", "grid size", cxxopts::value<int>()->default_value("500"))
-        ("specrate", "speciation rate", cxxopts::value<double>()->default_value("0.0001"))
+        ("c,specrate", "speciation rate", cxxopts::value<double>()->default_value("0.0001"))
         ("r,reps", "number of repetitions", cxxopts::value<int>()->default_value("1"))
         ("m,mutsize", "maximum change in mutation event", cxxopts::value<double>()->default_value("0.1"))
         ("o,outfile", "output file prefix", cxxopts::value<std::string>()->default_value("out"))
@@ -128,7 +128,7 @@ int main(int argc, char* argv[]){
         println("\tsize = %d%s%d", size, "x", size)
         println("\tindividuals per patch = %f", 1/p)
         println("\tmutation size = %f", mutsize)
-        println("\tspeciation rate = %f", specrate)
+        println("\tspeciation rate = %.2e", specrate)
         println("\tinvasion rate = %f", invrate)
         println("\ttimescale = %d", timescale)
         println("\tnsteps = %d", nsteps)

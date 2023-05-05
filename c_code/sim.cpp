@@ -78,7 +78,7 @@ int main(int argc, char* argv[]){
         println("\tsize = %d%s%d", size, "x", size)
         println("\tindividuals per patch = %f", 1/p)
         println("\tmutation size = %f", mutsize)
-        println("\tspeciation rate = %f", specrate)
+        println("\tspeciation rate = %.2e", specrate)
         println("\ttimescale = %d", timescale)
     println("");
     fflush(stdout);
