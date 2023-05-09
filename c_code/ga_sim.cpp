@@ -109,7 +109,6 @@ int main(int argc, char* argv[]){
     NGA_Distribution(ga_land_grid, me, lo, hi);
     NGA_Access(ga_land_grid, lo, hi, &land_grid_ptr, grid_ld);
 
-
     println("Inputs:")
         println("\trepetitions = %d", nrep)
         println("\tsize = %d%s%d", size, "x", size)
@@ -125,7 +124,15 @@ int main(int argc, char* argv[]){
 
     // Random number generation
     CRandomSFMT1 RanGen(time(0)+me*10); // Agner Combined generator
-    int local_area = (hi[0]-lo[0]+1)*(hi[1]-lo[1]+1);
+    int local_cols = (hi[0]-lo[0]+1);
+    int local_rows = (hi[1]-lo[1]+1);
+    int local_area = local_cols*local_rows;
+    //int local_area = (hi[0]-lo[0]+1)*(hi[1]-lo[1]+1);
+    double land_mask_data[local_area];
+    double* land_mask[local_rows];
+    for(size_t i = 0; i < local_rows; i++) {
+        land_mask[i] = land_mask_data + i*local_cols;
+    }
     // distribution for speciation events
     std::default_random_engine generator;
     std::binomial_distribution<int> speciation_distribution(local_area, specrate);
@@ -139,12 +146,24 @@ int main(int argc, char* argv[]){
         GA_Update_ghosts(ga_land_grid);
         NGA_Access_ghosts(ga_land_grid, ghost_dims, &ghost_grid_ptr, ghost_grid_ld);
 
+        // zero out mask except local edges
+        memset(land_mask_data, 0, sizeof(*land_mask_data));
+        for(size_t i = 0; i < local_rows; i++) {
+            land_mask[i][0] = 1;
+            land_mask[i][local_cols-1] = 1;
+        }
+        for(size_t i = 0; i < local_cols; i++) {
+            land_mask[0][i] = 1;
+            land_mask[local_rows-1][i] = 1;
+        }
+
         // invasion rule variables
         cell_type neighborhood[8];
         cell_type inv[8];
         cell_type inv_sum = 0;
         int inv_index = 0;
 
+        int row, col;
         for(int step = 0; step < timescale; step++) {
 
             // speciation rule
@@ -165,6 +184,27 @@ int main(int argc, char* argv[]){
                     if(RanGen.Random() <= probsuccess) {
                         ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] *= ratio;
                     }
+
+                    // set mask for [i][j] and surrounding cells unless on edge
+                    for(int x = -1; x <= 1; x++) {
+                        for(int y = -1; y <= 1; y++) {
+                            row = i+x;
+                            col = j+y;
+                            if(row >= local_cols-1 || row <= 0)
+                                continue;
+                            if(col >= local_rows-1 || col <= 0)
+                                continue;
+                            cell_type local_max = ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS];
+                            for(int xx = -1; xx <= 1; xx++) {
+                                for(int yy = -1; yy <= 1; yy++) {
+                                    int neighbor_row = row+xx;
+                                    int neighbor_col = col+yy;
+                                    local_max = std::max(local_max, ghost_grid_ptr[(neighbor_row+GHOSTS)*grid_ld[0]+neighbor_col+GHOSTS]);
+                                }
+                            }
+                            land_mask[row][col] = local_max*p/(local_max*p+ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS]*(1-p));
+                        }
+                    }
                 }
             }
 
@@ -175,32 +215,33 @@ int main(int argc, char* argv[]){
             std::vector<cell_update> updates;
             for(int i = 0; i <= hi[0]-lo[0]; i++) {
                 for(int j = 0; j <= hi[1]-lo[1]; j++) {
-                    double randval = RanGen.Random(); //random_float();
-                    if(randval < invrate) {
-                        inv_sum = 0;
-                        inv_index = 0;
-                        for(int x = -1; x <= 1; x++) {
-                            for(int y = -1; y <= 1; y++) {
-                                if((x != 0 || y != 0)) {
-
-                                    neighborhood[inv_index] = ghost_grid_ptr[(i+x+GHOSTS)*grid_ld[0]+j+y+GHOSTS];
-                                    inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS]*(1-p));
-                                    inv_sum += inv[inv_index];
-                                    inv_index++;
+                    if(land_mask[i][j] != 0) {
+                        double randval = RanGen.Random(); //random_float();
+                        if(randval < land_mask[i][j]) {
+                            inv_sum = 0;
+                            inv_index = 0;
+                            for(int x = -1; x <= 1; x++) {
+                                for(int y = -1; y <= 1; y++) {
+                                    if((x != 0 || y != 0)) {
+                                        neighborhood[inv_index] = ghost_grid_ptr[(i+x+GHOSTS)*grid_ld[0]+j+y+GHOSTS];
+                                        inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS]*(1-p));
+                                        inv_sum += inv[inv_index];
+                                        inv_index++;
+                                    }
                                 }
                             }
-                        }
 
-                        if(randval <= inv_sum/8) {
-                            // Get random element with weighted probabilities
-                            double weighted_rand = RanGen.Random()*inv_sum;
-                            inv_index = 0;
-                            while(weighted_rand > inv[inv_index]) {
-                                weighted_rand -= inv[inv_index];
-                                inv_index++;
-                            }
-                            if(neighborhood[inv_index] != ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS]) {
-                                updates.push_back({i, j, neighborhood[inv_index]});
+                            if(randval <= inv_sum/8) {
+                                // Get random element with weighted probabilities
+                                double weighted_rand = RanGen.Random()*inv_sum;
+                                inv_index = 0;
+                                while(weighted_rand > inv[inv_index]) {
+                                    weighted_rand -= inv[inv_index];
+                                    inv_index++;
+                                }
+                                if(neighborhood[inv_index] != ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS]) {
+                                    updates.push_back({i, j, neighborhood[inv_index]});
+                                }
                             }
                         }
                     }
@@ -209,6 +250,38 @@ int main(int argc, char* argv[]){
 
             for(const auto& [i, j, val] : updates) {
                 ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] = val;
+                for(int x = -1; x <= 1; x++) {
+                    for(int y = -1; y <= 1; y++) {
+                        row = i+x;
+                        col = j+y;
+                        if(row >= local_cols-1 || row <= 0)
+                            continue;
+                        if(col >= local_rows-1 || col <= 0)
+                            continue;
+                        cell_type local_max = 0;
+                        for(int xx = -1; xx <= 1; xx++) {
+                            for(int yy = -1; yy <= 1; yy++) {
+                                row = i+x+xx;
+                                col = j+y+yy;
+                                if(row >= local_cols-1 || row <= 0)
+                                    continue;
+                                if(col >= local_rows-1 || col <= 0)
+                                    continue;
+                                if(ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS] != val && ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS] > local_max) {
+                                    local_max = ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS];
+                                }
+                            }
+                        }
+                        row = i+x;
+                        col = j+y;
+                        if(local_max == 0) {
+                            land_mask[row][col] = 0;
+                        }
+                        else {
+                            land_mask[row][col] = local_max*p/(local_max*p+ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS]*(1-p));
+                        }
+                    }
+                }
             }
 
             // renormalize every nstep steps
