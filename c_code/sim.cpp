@@ -78,7 +78,7 @@ int main(int argc, char* argv[]){
         println("\tsize = %d%s%d", size, "x", size)
         println("\tindividuals per patch = %f", 1/p)
         println("\tmutation size = %f", mutsize)
-        println("\tspeciation rate = %f", specrate)
+        println("\tspeciation rate = %.2e", specrate)
         println("\ttimescale = %d", timescale)
     println("");
     fflush(stdout);
@@ -167,8 +167,12 @@ int main(int argc, char* argv[]){
                             for(int x = -1; x <= 1; x++) {
                                 for(int y = -1; y <= 1; y++) {
                                     if((x != 0 || y != 0)) {
-                                        row = (i+x+size)%size;
-                                        col = (j+y+size)%size;
+                                        row = i+x;
+                                        col = j+y;
+                                        if(row>= size || row < 0)
+                                            row = (row+size)%size;
+                                        if(col >= size || col < 0)
+                                            col = (col+size)%size;
                                         neighborhood[inv_index] = land_grid[row][col];
                                         inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+land_grid[i][j]*(1-p));
                                         inv_sum += inv[inv_index];

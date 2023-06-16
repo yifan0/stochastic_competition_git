@@ -26,12 +26,12 @@ using namespace std;
 //     return a;
 // }
 // width, species count, species fitness, slope of width
-tuple<array<double,4>,vector<int>,vector<double>,double> width2D(string fname) {
-    int p2_start = 4;
-    int p2_end = 7;
+tuple<array<double,10>,vector<int>,vector<double>,double> width2D(string fname) {
+    int p2_start = 1;
+    int p2_end = 10;
     int p2_range = p2_end-p2_start+1;
     // load landscape
-    array<double,4> width_arr;
+    array<double,10> width_arr;
     width_arr[0]=0.0;
     width_arr[1]=0.0;
     width_arr[2]=0.0;
@@ -73,7 +73,7 @@ tuple<array<double,4>,vector<int>,vector<double>,double> width2D(string fname) {
     for (int p2=p2_start; p2<=p2_end; ++p2){
         int samp_size = pow(2,p2);
         sample_list.push_back(log(samp_size));
-        // cout << "p2 = " << p2 << endl;
+        cout << "p2 = " << p2 << endl;
         // initialize window
         double tempwidth = 0;
         double tempmean = 0;
@@ -183,6 +183,6 @@ tuple<array<double,4>,vector<int>,vector<double>,double> width2D(string fname) {
     }
     cout << endl;
     double coeff = slope(sample_list,width);
-    // cout << "slope" << coeff << endl;
+    cout << "slope" << coeff << endl;
     return make_tuple(width_arr,species_count,species_fitness,coeff);
 }

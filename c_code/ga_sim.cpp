@@ -43,15 +43,12 @@ int main(int argc, char* argv[]){
     std::chrono::time_point<std::chrono::system_clock> start_time, end_time, rep_start_time, rep_end_time, out_start_time, out_end_time;
     int me, nprocs;
     int dims[NDIM];
+    int grid_ld[NDIM];
     int lo[NDIM], hi[NDIM];
-    int mask_lo[NDIM], mask_hi[NDIM];
-    int grid_ld[NDIM], mask_ld[NDIM];
-    int ghost_mask_ld[NDIM-1];
     int ghost_grid_ld[NDIM-1];
-    int ghost_dims[NDIM], ghost_mask_dims[NDIM];
+    int ghost_dims[NDIM];
     int ghost_width[NDIM];
     double* land_grid_ptr, *ghost_grid_ptr;
-    int* land_mask_ptr, *ghost_mask_ptr;
     int heap=3000000, stack=3000000; // TODO: find out if these are good values
     FILE *fp;
 
@@ -67,7 +64,7 @@ int main(int argc, char* argv[]){
 
     options.add_options()
         ("s,size", "grid size", cxxopts::value<int>()->default_value("500"))
-        ("specrate", "speciation rate", cxxopts::value<double>()->default_value("0.0001"))
+        ("c,specrate", "speciation rate", cxxopts::value<double>()->default_value("0.0001"))
         ("r,reps", "number of repetitions", cxxopts::value<int>()->default_value("1"))
         ("m,mutsize", "maximum change in mutation event", cxxopts::value<double>()->default_value("0.1"))
         ("o,outfile", "output file prefix", cxxopts::value<std::string>()->default_value("out"))
@@ -107,28 +104,17 @@ int main(int argc, char* argv[]){
         ghost_width[i] = GHOSTS;
     }
     char land_grid_name[] = "land grid";
-    char land_mask_name[] = "land mask";
     int ga_land_grid = NGA_Create_ghosts(C_DBL, NDIM, dims, ghost_width, land_grid_name, NULL);
-    int ga_land_mask = NGA_Create_ghosts(C_INT, NDIM, dims, ghost_width, land_mask_name, NULL);
 
     NGA_Distribution(ga_land_grid, me, lo, hi);
-    NGA_Distribution(ga_land_mask, me, mask_lo, mask_hi);
-    for(int i = 0; i < NDIM; i++) {
-        if(lo[i] != mask_lo[i] || hi[i] != mask_hi[i]) {
-            char dist_err_msg[] = "Land grid and mask must have same distribution";
-            GA_Error(dist_err_msg, 1);
-        }
-    }
     NGA_Access(ga_land_grid, lo, hi, &land_grid_ptr, grid_ld);
-    NGA_Access(ga_land_mask, mask_lo, mask_hi, &land_mask_ptr, mask_ld);
-
 
     println("Inputs:")
         println("\trepetitions = %d", nrep)
         println("\tsize = %d%s%d", size, "x", size)
         println("\tindividuals per patch = %f", 1/p)
         println("\tmutation size = %f", mutsize)
-        println("\tspeciation rate = %f", specrate)
+        println("\tspeciation rate = %.2e", specrate)
         println("\tinvasion rate = %f", invrate)
         println("\ttimescale = %d", timescale)
         println("\tnsteps = %d", nsteps)
@@ -138,7 +124,15 @@ int main(int argc, char* argv[]){
 
     // Random number generation
     CRandomSFMT1 RanGen(time(0)+me*10); // Agner Combined generator
-    int local_area = (hi[0]-lo[0]+1)*(hi[1]-lo[1]+1);
+    int local_cols = (hi[0]-lo[0]+1);
+    int local_rows = (hi[1]-lo[1]+1);
+    int local_area = local_cols*local_rows;
+    //int local_area = (hi[0]-lo[0]+1)*(hi[1]-lo[1]+1);
+    double land_mask_data[local_area];
+    double* land_mask[local_rows];
+    for(size_t i = 0; i < local_rows; i++) {
+        land_mask[i] = land_mask_data + i*local_cols;
+    }
     // distribution for speciation events
     std::default_random_engine generator;
     std::binomial_distribution<int> speciation_distribution(local_area, specrate);
@@ -149,11 +143,19 @@ int main(int argc, char* argv[]){
         int zero = 0;
         double one = 1;
         GA_Fill(ga_land_grid, &one);
-        GA_Fill(ga_land_mask, &zero);
         GA_Update_ghosts(ga_land_grid);
-        GA_Update_ghosts(ga_land_mask);
         NGA_Access_ghosts(ga_land_grid, ghost_dims, &ghost_grid_ptr, ghost_grid_ld);
-        NGA_Access_ghosts(ga_land_mask, ghost_mask_dims, &ghost_mask_ptr, ghost_mask_ld);
+
+        // zero out mask except local edges
+        memset(land_mask_data, 0, sizeof(*land_mask_data));
+        for(size_t i = 0; i < local_rows; i++) {
+            land_mask[i][0] = 1;
+            land_mask[i][local_cols-1] = 1;
+        }
+        for(size_t i = 0; i < local_cols; i++) {
+            land_mask[0][i] = 1;
+            land_mask[local_rows-1][i] = 1;
+        }
 
         // invasion rule variables
         cell_type neighborhood[8];
@@ -161,6 +163,7 @@ int main(int argc, char* argv[]){
         cell_type inv_sum = 0;
         int inv_index = 0;
 
+        int row, col;
         for(int step = 0; step < timescale; step++) {
 
             // speciation rule
@@ -180,13 +183,26 @@ int main(int argc, char* argv[]){
                     float probsuccess = p*ratio/(p*(ratio-1)+1);
                     if(RanGen.Random() <= probsuccess) {
                         ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] *= ratio;
-                        ghost_mask_ptr[(i+GHOSTS)*mask_ld[0]+j+GHOSTS] = true;
-                        for(int x = -1; x <= 1; x++) {
-                            for(int y = -1; y <= 1; y++) {
-                                if((x != 0 || y != 0)) {
-                                    ghost_mask_ptr[ (i+x+GHOSTS)*mask_ld[0] + j+y + GHOSTS] = true;
+                    }
+
+                    // set mask for [i][j] and surrounding cells unless on edge
+                    for(int x = -1; x <= 1; x++) {
+                        for(int y = -1; y <= 1; y++) {
+                            row = i+x;
+                            col = j+y;
+                            if(row >= local_cols-1 || row <= 0)
+                                continue;
+                            if(col >= local_rows-1 || col <= 0)
+                                continue;
+                            cell_type local_max = ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS];
+                            for(int xx = -1; xx <= 1; xx++) {
+                                for(int yy = -1; yy <= 1; yy++) {
+                                    int neighbor_row = row+xx;
+                                    int neighbor_col = col+yy;
+                                    local_max = std::max(local_max, ghost_grid_ptr[(neighbor_row+GHOSTS)*grid_ld[0]+neighbor_col+GHOSTS]);
                                 }
                             }
+                            land_mask[row][col] = local_max*p/(local_max*p+ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS]*(1-p));
                         }
                     }
                 }
@@ -194,21 +210,19 @@ int main(int argc, char* argv[]){
 
             if(step%10 == 0)
                 GA_Update_ghosts(ga_land_grid);
-            //GA_Update_ghosts(ga_land_mask);
 
             // invasion rule
             std::vector<cell_update> updates;
             for(int i = 0; i <= hi[0]-lo[0]; i++) {
                 for(int j = 0; j <= hi[1]-lo[1]; j++) {
-                    if(ghost_mask_ptr[(i+GHOSTS)*mask_ld[0]+j+GHOSTS] || i == 0 || i == hi[0]-lo[0] || j == 0 || j == hi[1]-lo[1]) {
+                    if(land_mask[i][j] != 0) {
                         double randval = RanGen.Random(); //random_float();
-                        if(randval < invrate) {
+                        if(randval < land_mask[i][j]) {
                             inv_sum = 0;
                             inv_index = 0;
                             for(int x = -1; x <= 1; x++) {
                                 for(int y = -1; y <= 1; y++) {
                                     if((x != 0 || y != 0)) {
-
                                         neighborhood[inv_index] = ghost_grid_ptr[(i+x+GHOSTS)*grid_ld[0]+j+y+GHOSTS];
                                         inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS]*(1-p));
                                         inv_sum += inv[inv_index];
@@ -236,23 +250,35 @@ int main(int argc, char* argv[]){
 
             for(const auto& [i, j, val] : updates) {
                 ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] = val;
-                bool unmask = true;
                 for(int x = -1; x <= 1; x++) {
                     for(int y = -1; y <= 1; y++) {
-                        if((x != 0 || y != 0)) {
-                            bool unmask = true;
-                            for(int xx = -1; xx <= 1; xx++) {
-                                for(int yy = -1; yy <= 1; yy++) {
-                                    if((xx != 0 || yy != 0)) {
-                                        if(ghost_grid_ptr[(i+x+xx+GHOSTS)*grid_ld[0]+j+y+yy+GHOSTS] != val) {
-                                            unmask = false;
-                                            break;
-                                        }
-                                    }
+                        row = i+x;
+                        col = j+y;
+                        if(row >= local_cols-1 || row <= 0)
+                            continue;
+                        if(col >= local_rows-1 || col <= 0)
+                            continue;
+                        cell_type local_max = 0;
+                        for(int xx = -1; xx <= 1; xx++) {
+                            for(int yy = -1; yy <= 1; yy++) {
+                                row = i+x+xx;
+                                col = j+y+yy;
+                                if(row >= local_cols-1 || row <= 0)
+                                    continue;
+                                if(col >= local_rows-1 || col <= 0)
+                                    continue;
+                                if(ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS] != val && ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS] > local_max) {
+                                    local_max = ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS];
                                 }
-                                if(!unmask) break;
                             }
-                            ghost_mask_ptr[(i+x+GHOSTS)*mask_ld[0]+j+y+GHOSTS] = !unmask;
+                        }
+                        row = i+x;
+                        col = j+y;
+                        if(local_max == 0) {
+                            land_mask[row][col] = 0;
+                        }
+                        else {
+                            land_mask[row][col] = local_max*p/(local_max*p+ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS]*(1-p));
                         }
                     }
                 }
@@ -305,7 +331,6 @@ int main(int argc, char* argv[]){
     fflush(stdout);
 
     GA_Destroy(ga_land_grid);
-    GA_Destroy(ga_land_mask);
 
     GA_Terminate();
     MPI_Finalize();

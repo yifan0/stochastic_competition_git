@@ -15,7 +15,7 @@ data = pd.read_csv(filename)
 
 # Create a heatmap using Matplotlib
 #plt.imshow(data, cmap='coolwarm', interpolation='antialiased')
-plt.pcolor(data, cmap=plt.cm.seismic, vmin=0, vmax=2)
+plt.pcolor(data, cmap=plt.cm.seismic, vmin=0.8, vmax=1.2)
 plt.colorbar()
 
 # Set the title and labels

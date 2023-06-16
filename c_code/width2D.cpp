@@ -21,17 +21,17 @@ using namespace std;
 int main() {
     ofstream myfile;
     vector<double> coeff_step;
-    int nrep = 1;
+    int nrep = 100;
     double coeff;
-    double width_step[nrep][4];
+    double width_step[nrep][10];
     vector<int> species_count_step[nrep];
     vector<double> species_fitness_step[nrep];
     for (int rep=1; rep<=nrep; ++rep){
         cout << rep << endl;
-        string fname = "test_ga_500_1_121_rep0.csv";
-        tuple<array<double,4>,vector<int>,vector<double>,double> result = width2D(fname);
+        string fname = "2D_landscape_2048_5/test_ga_2048_1_121_rep0_checkpoint"+to_string(rep-1)+".csv";
+        tuple<array<double,10>,vector<int>,vector<double>,double> result = width2D(fname);
         // width
-        array<double,4> width_arr = get<0>(result);
+        array<double,10> width_arr = get<0>(result);
         // species count
         vector<int> species_count = get<1>(result);
         species_count_step[rep-1] = species_count;
@@ -41,19 +41,19 @@ int main() {
         // slope of width
         coeff = get<3>(result);
         coeff_step.push_back(coeff);
-        for (int i=0; i<=3; i++){
+        for (int i=0; i<=9; i++){
             width_step[rep-1][i] = width_arr[i];
         }
     }
-    myfile.open ("2D_width_500_4.csv");
+    myfile.open ("2D_width_2048_5.csv");
     for (int i=0;i<=nrep-1;i++){
-        for (int j=0; j<=3; j++){
+        for (int j=0; j<=9; j++){
             myfile << width_step[i][j] << ",";
         }
         myfile << endl;
     }
     myfile.close();
-    myfile.open ("2D_species_count_500_4.csv");
+    myfile.open ("2D_species_count_2048_5.csv");
     for (int i=0;i<=nrep-1;i++){
         vector<int> species_count = species_count_step[i];
         for (int count: species_count){
@@ -62,7 +62,7 @@ int main() {
         myfile << endl;
     }
     myfile.close();
-    myfile.open ("2D_species_fitness_500_4.csv");
+    myfile.open ("2D_species_fitness_2048_5.csv");
     for (int i=0;i<=nrep-1;i++){
         vector<double> species_fitness = species_fitness_step[i];
         for (double fitness: species_fitness){
@@ -71,7 +71,7 @@ int main() {
         myfile << endl;
     }
     myfile.close();    
-    myfile.open ("2D_slope_of_width_500_8_4.csv");
+    myfile.open ("2D_slope_of_width_2048_5.csv");
     for (int i = 0; i <= nrep-1; i++){
         myfile << coeff_step[i] << ",";
     }
