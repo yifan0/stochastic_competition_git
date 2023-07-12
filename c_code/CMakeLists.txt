@@ -21,6 +21,7 @@ set(targets
     omp_sim
     tree_sim
     ga_sim
+    ga_sim1D
     test_tree
     benchmark
 )
@@ -36,6 +37,13 @@ target_include_directories(ga_sim PUBLIC ${globalarrays_SOURCE_DIR}/global/src)
 target_include_directories(ga_sim PUBLIC ${globalarrays_BINARY_DIR}/ma)
 target_include_directories(ga_sim PUBLIC ${globalarrays_BINARY_DIR}/gaf2c)
 
+target_include_directories(ga_sim1D PUBLIC ${globalarrays_SOURCE_DIR}/ma)
+target_include_directories(ga_sim1D PUBLIC ${globalarrays_SOURCE_DIR}/ga++/src)
+target_include_directories(ga_sim1D PUBLIC ${globalarrays_SOURCE_DIR}/global/src)
+target_include_directories(ga_sim1D PUBLIC ${globalarrays_BINARY_DIR}/ma)
+target_include_directories(ga_sim1D PUBLIC ${globalarrays_BINARY_DIR}/gaf2c)
+
 target_link_libraries(ga_sim GlobalArrays::ga MPI::MPI_CXX)
+target_link_libraries(ga_sim1D GlobalArrays::ga MPI::MPI_CXX)
 target_link_libraries(omp_sim PUBLIC OpenMP::OpenMP_CXX)
 
