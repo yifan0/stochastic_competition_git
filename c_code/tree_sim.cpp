@@ -16,19 +16,21 @@
 #include "sfmt.cpp"
 #include "userintf.cpp"
 #include "tree.cpp"
+#include <stdlib.h> //srand
 using namespace std;
 
 #define println(...) { printf(__VA_ARGS__); printf("\n"); }
 #define print(...) { printf(__VA_ARGS__); }
 
 int main(int argc, char* argv[]){
+    srand(1);
     int nrep = 10;
     int size = 100;
     double p = 0.1;
     double mutsize = 0.1;
     double specrate = 0.0001; // 1.0e-4
     double invrate = 0.2;
-    invrate = 0;
+    // invrate = 0;
     int timescale = 100*size/p;
     int nsteps = 100;
     int endtime = timescale/nsteps;
@@ -89,7 +91,8 @@ int main(int argc, char* argv[]){
     fflush(stdout);
 
     // Random number generation
-    CRandomSFMT1 RanGen((int)time(NULL)); // Agner Combined generator
+    // CRandomSFMT1 RanGen((int)time(NULL)); // Agner Combined generator
+    CRandomSFMT1 RanGen(10);
     // distribution for speciation events
     std::default_random_engine generator;
     std::binomial_distribution<int> speciation_distribution(size*size, specrate);
@@ -224,6 +227,7 @@ int main(int argc, char* argv[]){
                     }
                     average += (row_average/(size*size));
                 }
+                // println("average = %f", average);
                 // divide everything by the global average -- iterate over tree
                 normalize(speciation_root, average);
             }
@@ -236,82 +240,82 @@ int main(int argc, char* argv[]){
 
         summary_start_time = std::chrono::system_clock::now();
 
-        // Calculate summary statistics
-        // TODO: optimize 
-        for(size_t summary_size = 16; summary_size < size; summary_size = summary_size << 1) {
-            // Statistics:
-            //  1. Number of unique species
-            //  2. Effective Population
-            //      = log(max) - log(min)
-            //  3. Variance
-            //      = sum(x1^2 + x2^2 + ... + xn^2)/n - (sum(x1 + x2 + ... + xn) / n)^2
-            // Count unique values
-            map<cell_type, size_t> count_set;
-            vector<size_t> unique_counts;
-            vector<cell_type> deltas;
-            // TODO: fill the set for the startup values
-            // TODO: set it so that each time it clears the old part and adds in the new part
-            // TODO: if we are doing a search for items, then make sure that's efficient
-            for(size_t i = 0; i < size-summary_size; i++) {
-                for(size_t j = 0; j < size-summary_size; j++) {
-                    //set<speciation_tree_node*> unique_values;
-                    set<cell_type> unique_values;
-                    for(size_t x = 0; x < summary_size; x++) {
-                        for(size_t y = 0; y < summary_size; y++) {
-                            unique_values.insert(land_grid[x+i][y+j]->val);
-                            //unique_values.insert(land_grid[x+i][y+j]);
-                        }
-                    }
-                    unique_counts.push_back(unique_values.size());
-                    cell_type min = *unique_values.begin();
-                    cell_type max = *unique_values.rbegin();
-                    deltas.push_back(max-min);
-                    //deltas.push_back(*unique_values.rbegin() - *unique_values.begin());
-                }
-            }
+        // // Calculate summary statistics
+        // // TODO: optimize 
+        // for(size_t summary_size = 16; summary_size < size; summary_size = summary_size << 1) {
+        //     // Statistics:
+        //     //  1. Number of unique species
+        //     //  2. Effective Population
+        //     //      = log(max) - log(min)
+        //     //  3. Variance
+        //     //      = sum(x1^2 + x2^2 + ... + xn^2)/n - (sum(x1 + x2 + ... + xn) / n)^2
+        //     // Count unique values
+        //     map<cell_type, size_t> count_set;
+        //     vector<size_t> unique_counts;
+        //     vector<cell_type> deltas;
+        //     // TODO: fill the set for the startup values
+        //     // TODO: set it so that each time it clears the old part and adds in the new part
+        //     // TODO: if we are doing a search for items, then make sure that's efficient
+        //     for(size_t i = 0; i < size-summary_size; i++) {
+        //         for(size_t j = 0; j < size-summary_size; j++) {
+        //             //set<speciation_tree_node*> unique_values;
+        //             set<cell_type> unique_values;
+        //             for(size_t x = 0; x < summary_size; x++) {
+        //                 for(size_t y = 0; y < summary_size; y++) {
+        //                     unique_values.insert(land_grid[x+i][y+j]->val);
+        //                     //unique_values.insert(land_grid[x+i][y+j]);
+        //                 }
+        //             }
+        //             unique_counts.push_back(unique_values.size());
+        //             cell_type min = *unique_values.begin();
+        //             cell_type max = *unique_values.rbegin();
+        //             deltas.push_back(max-min);
+        //             //deltas.push_back(*unique_values.rbegin() - *unique_values.begin());
+        //         }
+        //     }
 
-            // summarize unique_counts
-            double average_unique_count = 0;
-            for(size_t count : unique_counts) {
-                average_unique_count += count;
-            }
-            average_unique_count /= unique_counts.size();
-            println("Average unique counts for rep %d on size %d = %f", rep, summary_size, average_unique_count);
+        //     // summarize unique_counts
+        //     double average_unique_count = 0;
+        //     for(size_t count : unique_counts) {
+        //         average_unique_count += count;
+        //     }
+        //     average_unique_count /= unique_counts.size();
+        //     println("Average unique counts for rep %d on size %d = %f", rep, summary_size, average_unique_count);
 
-            // summarize deltas
-            cell_type average_delta = 0;
-            for(cell_type d : deltas) {
-                average_delta += d;
-            }
-            average_delta /= deltas.size();
-            println("Average delta for rep %d on size %d = %f", rep, summary_size, average_delta);
+        //     // summarize deltas
+        //     cell_type average_delta = 0;
+        //     for(cell_type d : deltas) {
+        //         average_delta += d;
+        //     }
+        //     average_delta /= deltas.size();
+        //     println("Average delta for rep %d on size %d = %f", rep, summary_size, average_delta);
 
-            // Average for sections
-            vector<cell_type> section_averages;
-            for(size_t i = 0; i < size-summary_size; i++) {
-                for(size_t j = 0; j < size-summary_size; j++) {
-                    cell_type sum = 0;
-                    for(size_t x = 0; x < summary_size; x++) {
-                        for(size_t y = 0; y < summary_size; y++) {
-                            sum += land_grid[x+i][y+j]->val;
-                        }
-                    }
-                    section_averages.push_back((sum / (summary_size*summary_size)));
-                }
-            }
-            double average_section = 0;
-            for(double a : section_averages) {
-                average_section += a;
-            }
-            average_section /= section_averages.size();
-            println("Average of section averages for rep %d on size %d = %f", rep, summary_size, average_section);
+        //     // Average for sections
+        //     vector<cell_type> section_averages;
+        //     for(size_t i = 0; i < size-summary_size; i++) {
+        //         for(size_t j = 0; j < size-summary_size; j++) {
+        //             cell_type sum = 0;
+        //             for(size_t x = 0; x < summary_size; x++) {
+        //                 for(size_t y = 0; y < summary_size; y++) {
+        //                     sum += land_grid[x+i][y+j]->val;
+        //                 }
+        //             }
+        //             section_averages.push_back((sum / (summary_size*summary_size)));
+        //         }
+        //     }
+        //     double average_section = 0;
+        //     for(double a : section_averages) {
+        //         average_section += a;
+        //     }
+        //     average_section /= section_averages.size();
+        //     println("Average of section averages for rep %d on size %d = %f", rep, summary_size, average_section);
 
-        }
+        // }
 
-        summary_end_time = std::chrono::system_clock::now();
-        std::chrono::duration<double> summary_time = summary_end_time - summary_start_time;
-        println("Rep %d summary time = %fs", rep, summary_time.count());
-        fflush(stdout);
+        // summary_end_time = std::chrono::system_clock::now();
+        // std::chrono::duration<double> summary_time = summary_end_time - summary_start_time;
+        // println("Rep %d summary time = %fs", rep, summary_time.count());
+        // fflush(stdout);
 
         out_start_time = std::chrono::system_clock::now();
         set<speciation_tree_node*> species;
@@ -329,11 +333,12 @@ int main(int argc, char* argv[]){
         }
         fclose(fp);
         println("Wrote results to file %s", outfile.c_str());
-
+        cout << "species diversity = " << species.size() << endl;
         outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".tree";
         fp = fopen(outfile.c_str(), "w");
         println("Depth of tree before pruning = %d", get_depth(speciation_root));
         prune(speciation_root, species);
+        // prune_test(speciation_root, species, speciation_root);
         string output_tree = toString(speciation_root);
         fprintf(fp, "%s;", output_tree.c_str());
         println("Unique species = %d", species.size());

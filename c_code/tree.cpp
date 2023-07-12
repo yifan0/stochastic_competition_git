@@ -2,6 +2,7 @@
 #include <string>
 #include <tuple>
 #include <set>
+#include <iostream>
 using namespace std;
 
 #ifndef TREE_
@@ -104,8 +105,15 @@ void normalize(speciation_tree_node* root, cell_type avg) {
 }
 
 void prune(speciation_tree_node* root, set<speciation_tree_node*> species) {
-    if(root == nullptr) return;
+    if(root == nullptr){
+        return;
+    } 
     if(species.count(root) == 0 && root->left_child == nullptr && root->right_child == nullptr) {
+        // return when parent of parent is nullptr
+        if (root->parent->parent == nullptr){
+            cout << "missed extinct species " << root->val << endl;
+            return;
+        }
         // species is extinct and so should be removed
         speciation_tree_node* parent = root->parent;
         speciation_tree_node* sibling;
@@ -123,15 +131,75 @@ void prune(speciation_tree_node* root, set<speciation_tree_node*> species) {
 
         if(parent->parent->left_child == parent) {
             parent->parent->left_child = sibling;
+            sibling->parent = parent->parent;
         } else {
             parent->parent->right_child = sibling;
+            sibling->parent = parent->parent;
         }
         delete(root);
         delete(parent);
-
+        return;
     }
     prune(root->left_child, species);
     prune(root->right_child, species);
+}
+
+void prune_test(speciation_tree_node* root, set<speciation_tree_node*> species, speciation_tree_node* speciation_root) {
+    if(root == nullptr){
+        cout << "root null" << endl;
+        return;
+    } 
+    cout << "root called " << root->val << " at depth " << get_depth(root) << endl;
+    cout << "tree at call " << toString(speciation_root).c_str() << endl;
+    if(species.count(root) == 0 && root->left_child == nullptr && root->right_child == nullptr) {
+        cout << "root to delete " << root->val << endl;
+        cout << toString(speciation_root).c_str() << endl;
+        if (root->parent->parent == nullptr){
+            cout << "parent of parent is null" << endl;
+            cout << toString(speciation_root).c_str() << endl;
+            return;
+        }
+        // species is extinct and so should be removed
+        speciation_tree_node* parent = root->parent;
+        speciation_tree_node* sibling;
+        if(root->parent->left_child == root) {
+            sibling = parent->right_child;
+            parent->right_child = nullptr;
+        }
+        else if(root->parent->right_child == root) {
+            sibling = parent->left_child;
+            parent->left_child = nullptr;
+        }
+        else {
+            println("Error pruning species");
+        }
+        if(parent->parent->left_child == parent) {
+            parent->parent->left_child = sibling;
+            sibling->parent = parent->parent;
+        } else {
+            parent->parent->right_child = sibling;
+            sibling->parent = parent->parent;
+        }
+        cout << "root = " << root->val << " deleted " << endl;
+        delete(root);
+        delete(parent);
+        // cout << "tree after deletion " << toString(speciation_root).c_str() << endl;
+        return;
+    }
+    // left child
+    if (root->left_child == nullptr){
+        cout << "left child of " << root->val << " at depth " << get_depth(root) << " is null" << endl;
+    } else {
+        cout << "left child of " << root->val << " at depth " << get_depth(root) << " is " << root->left_child->val << " at depth " << get_depth(root->left_child) << endl;
+    }
+    prune_test(root->left_child, species, speciation_root);
+    // right child
+    if (root->right_child == nullptr){
+        cout << "right child of " << root->val << " at depth " << get_depth(root) << " is null" << endl;
+    } else {
+        cout << "right child of " << root->val << " at depth " << get_depth(root) << " is " << root->right_child->val << " at depth " << get_depth(root->right_child) << endl;
+    }
+    prune_test(root->right_child, species, speciation_root);
 }
 
 #endif
