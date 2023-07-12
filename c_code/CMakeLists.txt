@@ -3,6 +3,7 @@ project (stochastic_competition VERSION 1.0.0 LANGUAGES CXX)
 
 find_package (MPI REQUIRED)
 find_package(OpenMP)
+#find_package(UPCXX REQUIRED)
 
 set(ENABLE_FORTRAN OFF)
 
@@ -19,10 +20,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -std=c++17")
 set(targets
     sim
     omp_sim
-    tree_sim
     ga_sim
     ga_sim1D
-    test_tree
     benchmark
 )
 
