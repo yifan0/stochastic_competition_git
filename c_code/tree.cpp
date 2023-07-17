@@ -47,7 +47,10 @@ string toString(speciation_tree_node* root) {
     }
 
     // for a parent, group the children in ()
-    string output = "(" + toString(root->right_child) + "," + toString(root->left_child) + ")";
+    // add branch length
+    int branch_len_left = root->left_child->time - root->time;
+    int branch_len_right = root->right_child->time - root->time;
+    string output = "(" + toString(root->right_child) + ":" + to_string(branch_len_left) + "," + toString(root->left_child) + ":" + to_string(branch_len_right) + ")";
     //output += std::to_string(root->val); // do not label internal nodes
     return output;
 }
@@ -68,7 +71,7 @@ size_t get_depth(speciation_tree_node* root) {
 }
 
 void speciation_event(speciation_tree_node* old_species, speciation_tree_node* new_species) {
-
+    // only occurs at the first speciation event
     if(old_species->parent->left_child == nullptr) {
         old_species->parent->left_child = new_species;
         new_species->parent = old_species->parent;
@@ -95,6 +98,7 @@ void speciation_event(speciation_tree_node* old_species, speciation_tree_node* n
 
     new_species->parent = internal_node;
     old_species->parent = internal_node;
+    old_species->time = new_species->time;
 }
 
 void normalize(speciation_tree_node* root, cell_type avg) {
