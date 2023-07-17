@@ -15,7 +15,7 @@
 #include "sfmt.h"
 #include "sfmt.cpp"
 #include "userintf.cpp"
-#include "tree.cpp"
+#include "tree.h"
 #include <stdlib.h> //srand
 using namespace std;
 
@@ -339,7 +339,14 @@ int main(int argc, char* argv[]){
         println("Depth of tree before pruning = %d", get_depth(speciation_root));
         prune(speciation_root, species);
         // prune_test(speciation_root, species, speciation_root);
-        string output_tree = toString(speciation_root);
+        string output_tree;
+        // if missed an extinct species in pruning, output the tree ignoring that species
+        if (::missed){
+            output_tree = toString(speciation_root->left_child);
+        }
+        else {
+            output_tree = toString(speciation_root);
+        }
         fprintf(fp, "%s;", output_tree.c_str());
         println("Unique species = %d", species.size());
         println("Depth of tree = %d", get_depth(speciation_root));
