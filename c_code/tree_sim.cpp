@@ -339,6 +339,15 @@ int main(int argc, char* argv[]){
         println("Depth of tree before pruning = %d", get_depth(speciation_root));
         prune(speciation_root, species);
         // prune_test(speciation_root, species, speciation_root);
+        string temp_tree = toString(speciation_root);
+        int tree_count = count(temp_tree.begin(), temp_tree.end(), '.');
+        while (tree_count != species.size() + missed){
+            cout << "tree_count = " << tree_count << endl;
+            cout << "prune again" << endl;
+            prune(speciation_root, species);
+            temp_tree = toString(speciation_root);
+            tree_count = count(temp_tree.begin(), temp_tree.end(), '.');
+        }
         string output_tree;
         // if missed an extinct species in pruning, output the tree ignoring that species
         if (::missed){
