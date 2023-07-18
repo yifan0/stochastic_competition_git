@@ -23,7 +23,7 @@ using namespace std;
 #define print(...) { printf(__VA_ARGS__); }
 
 int main(int argc, char* argv[]){
-    srand(1);
+    // srand(1);
     int nrep = 10;
     int size = 100;
     double p = 0.1;
@@ -140,10 +140,10 @@ int main(int argc, char* argv[]){
                         land_grid[i][j] = new speciation_tree_node(parent->val*ratio, step, nullptr);
                         speciation_event(parent, land_grid[i][j]);
                         land_mask[i][j] = true;
-                        for(int x = -1; x < 1; x++) {
+                        for(int x = -1; x <= 1; x++) {
                             for(int y = -1; y <= 1; y++) {
-                                if((x != 0 || y != 0) && i+x >= 0 && i+x < size && j+y >= 0 && j+y < size) {
-                                    land_mask[i+x][j+y] = true;
+                                if (x != 0 || y != 0){
+                                    land_mask[(i+x+size)%size][(j+y+size)%size] = true;
                                 }
                             }
                         }
@@ -161,11 +161,11 @@ int main(int argc, char* argv[]){
                         if(randval < invrate) {
                             inv_sum = 0;
                             inv_index = 0;
-                            for(int x = -1; x < 1; x++) {
+                            for(int x = -1; x <= 1; x++) {
                                 for(int y = -1; y <= 1; y++) {
-                                    if((x != 0 || y != 0) && i+x >= 0 && i+x < size && j+y >= 0 && j+y < size) {
+                                    if(x != 0 || y != 0){
 
-                                        neighborhood[inv_index] = land_grid[i+x][j+y];
+                                        neighborhood[inv_index] = land_grid[(i+x+size)%size][(j+y+size)%size];
                                         inv[inv_index] = p*neighborhood[inv_index]->val/(p*neighborhood[inv_index]->val+land_grid[i][j]->val*(1-p));
                                         inv_sum += inv[inv_index];
                                         inv_index++;
@@ -194,15 +194,15 @@ int main(int argc, char* argv[]){
             for(const auto& [i, j, val] : updates) {
                 land_grid[i][j] = val;
                 bool unmask = true;
-                for(int x = -1; x < 1; x++) {
+                for(int x = -1; x <= 1; x++) {
                     for(int y = -1; y <= 1; y++) {
-                        if((x != 0 || y != 0) && i+x >= 0 && i+x < size && j+y >= 0 && j+y < size) {
+                        if(x != 0 || y != 0){
                             bool unmask = true;
-                            if(land_grid[i+x][j+x] != val) { unmask = false; }
-                            for(int xx = -1; xx < 1; xx++) {
+                            if(land_grid[(i+x+size)%size][(j+y+size)%size] != val) { unmask = false; }
+                            for(int xx = -1; xx <= 1; xx++) {
                                 for(int yy = -1; yy <= 1; yy++) {
-                                    if((xx != 0 || yy != 0) && i+x+xx >= 0 && i+x+xx < size && j+y+yy >= 0 && j+y+yy < size) {
-                                        if(land_grid[i+x+xx][j+y+yy] != val) {
+                                    if(xx != 0 || yy != 0){
+                                        if(land_grid[(i+x+xx+size)%size][(j+y+yy+size)%size] != val) {
                                             unmask = false;
                                             break;
                                         }
@@ -210,7 +210,7 @@ int main(int argc, char* argv[]){
                                 }
                                 if(!unmask) break;
                             }
-                            land_mask[i+x][j+y] = !unmask;
+                            land_mask[(i+x+size)%size][(j+y+size)%size] = !unmask;
                         }
                     }
                 }
