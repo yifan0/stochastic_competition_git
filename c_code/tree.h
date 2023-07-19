@@ -45,14 +45,38 @@ speciation_tree_node* find_node(speciation_tree_node* root, cell_type target) {
 string toString(speciation_tree_node* root) {
     // for a leaf, just return the label
     if(root->right_child == nullptr || root->left_child == nullptr) {
-        return std::to_string(root->val);
+        return to_string(root->val);
     }
 
     // for a parent, group the children in ()
     // add branch length
     int branch_len_left = root->left_child->time - root->time;
     int branch_len_right = root->right_child->time - root->time;
-    string output = "(" + toString(root->right_child) + ":" + to_string(branch_len_left) + "," + toString(root->left_child) + ":" + to_string(branch_len_right) + ")";
+    string output = "(" + toString(root->left_child) + ":" + to_string(branch_len_left) + "," + toString(root->right_child) + ":" + to_string(branch_len_right) + ")";
+    //output += std::to_string(root->val); // do not label internal nodes
+    return output;
+}
+
+string toString_final(speciation_tree_node* root, int timescale) {
+    // for a leaf, just return the label
+    if(root->left_child->right_child == nullptr && root->right_child->right_child == nullptr) {
+        string output = "(" + to_string(root->left_child->val) + ":" + to_string(timescale-root->time) + "," + to_string(root->right_child->val) + ":" + to_string(timescale-root->time) + ")";
+        return output;
+    } else if (root->left_child->right_child == nullptr){
+        int branch_len_right = root->right_child->time - root->time;
+        string output = "(" + to_string(root->left_child->val) + ":" + to_string(timescale-root->time) + "," + toString_final(root->right_child, timescale) + ":" + to_string(branch_len_right) + ")";
+        return output;
+    } else if (root->right_child->right_child == nullptr){
+        int branch_len_left = root->left_child->time - root->time;
+        string output = "(" + toString_final(root->left_child, timescale) + ":" + to_string(branch_len_left) + "," + to_string(root->right_child->val) + ":" + to_string(timescale-root->time) + ")";
+        return output;
+    }
+
+    // for a parent, group the children in ()
+    // add branch length
+    int branch_len_left = root->left_child->time - root->time;
+    int branch_len_right = root->right_child->time - root->time;
+    string output = "(" + toString_final(root->left_child, timescale) + ":" + to_string(branch_len_left) + "," + toString_final(root->right_child, timescale) + ":" + to_string(branch_len_right) + ")";
     //output += std::to_string(root->val); // do not label internal nodes
     return output;
 }

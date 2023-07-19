@@ -351,10 +351,12 @@ int main(int argc, char* argv[]){
         string output_tree;
         // if missed an extinct species in pruning, output the tree ignoring that species
         if (::missed){
-            output_tree = toString(speciation_root->left_child);
+            // output_tree = toString(speciation_root->left_child);
+            output_tree = toString_final(speciation_root->left_child, timescale);
         }
         else {
-            output_tree = toString(speciation_root);
+            // output_tree = toString(speciation_root);
+            output_tree = toString_final(speciation_root, timescale);
         }
         fprintf(fp, "%s;", output_tree.c_str());
         println("Unique species = %d", species.size());
