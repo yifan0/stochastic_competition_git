@@ -102,7 +102,7 @@ int main(int argc, char* argv[]){
     GA_Mask_sync(0, 0); // turns off sync when updating ghosts
     dims[0] = 16;
     dims[1] = size;
-    ghost_width[0] = 2;
+    ghost_width[0] = 0;
     ghost_width[1] = 2;
     char land_grid_name[] = "land grid";
     int ga_land_grid = NGA_Create_ghosts(C_DBL, NDIM, dims, ghost_width, land_grid_name, NULL);
@@ -184,7 +184,7 @@ int main(int argc, char* argv[]){
                     }
                     float probsuccess = p*ratio/(p*(ratio-1)+1);
                     if(RanGen.Random() <= probsuccess) {
-                        ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] *= ratio;
+                        ghost_grid_ptr[(i+ghost_width[0])*grid_ld[0]+j+ghost_width[1]] *= ratio;
                     }
 
                     // set mask for [i][j] and surrounding cells unless on edge
@@ -195,13 +195,13 @@ int main(int argc, char* argv[]){
                             continue;
                         if(col > local_rows-1 || col < 0)
                             continue;
-                        cell_type local_max = ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS];
+                        cell_type local_max = ghost_grid_ptr[(row+ghost_width[0])*grid_ld[0]+col+ghost_width[1]];
                         for(int yy = -1; yy <= 1; yy++) {
                             int neighbor_row = row;
                             int neighbor_col = col+yy;
-                            local_max = std::max(local_max, ghost_grid_ptr[(neighbor_row+GHOSTS)*grid_ld[0]+neighbor_col+GHOSTS]);
+                            local_max = std::max(local_max, ghost_grid_ptr[(neighbor_row+ghost_width[0])*grid_ld[0]+neighbor_col+ghost_width[1]]);
                         }
-                        land_mask[row][col] = local_max*p/(local_max*p+ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS]*(1-p));
+                        land_mask[row][col] = local_max*p/(local_max*p+ghost_grid_ptr[(row+ghost_width[0])*grid_ld[0]+col+ghost_width[1]]*(1-p));
                     }
                 }
             }
@@ -220,8 +220,8 @@ int main(int argc, char* argv[]){
                             inv_index = 0;
                             for(int y = -1; y <= 1; y++) {
                                 if(y != 0) {
-                                    neighborhood[inv_index] = ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS+y];
-                                    inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS]*(1-p));
+                                    neighborhood[inv_index] = ghost_grid_ptr[(i+ghost_width[0])*grid_ld[0]+j+ghost_width[1]+y];
+                                    inv[inv_index] = p*neighborhood[inv_index]/(p*neighborhood[inv_index]+ghost_grid_ptr[(i+ghost_width[0])*grid_ld[0]+j+ghost_width[1]]*(1-p));
                                     inv_sum += inv[inv_index];
                                     inv_index++;
                                 }
@@ -235,7 +235,7 @@ int main(int argc, char* argv[]){
                                     weighted_rand -= inv[inv_index];
                                     inv_index++;
                                 }
-                                if(neighborhood[inv_index] != ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS]) {
+                                if(neighborhood[inv_index] != ghost_grid_ptr[(i+ghost_width[0])*grid_ld[0]+j+ghost_width[1]]) {
                                     updates.push_back({i, j, neighborhood[inv_index]});
                                 }
                             }
@@ -245,7 +245,7 @@ int main(int argc, char* argv[]){
             }
 
             for(const auto& [i, j, val] : updates) {
-                ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] = val;
+                ghost_grid_ptr[(i+ghost_width[0])*grid_ld[0]+j+ghost_width[1]] = val;
                 for(int y = -1; y <= 1; y++) {
                     row = i;
                     col = j+y;
@@ -261,8 +261,8 @@ int main(int argc, char* argv[]){
                             continue;
                         if(col > local_rows-1 || col < 0)
                             continue;
-                        if(ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS] != val && ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS] > local_max) {
-                            local_max = ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS];
+                        if(ghost_grid_ptr[(row+ghost_width[0])*grid_ld[0]+col+ghost_width[1]] != val && ghost_grid_ptr[(row+ghost_width[0])*grid_ld[0]+col+ghost_width[1]] > local_max) {
+                            local_max = ghost_grid_ptr[(row+ghost_width[0])*grid_ld[0]+col+ghost_width[1]];
                         }
                     }
                     row = i;
@@ -271,7 +271,7 @@ int main(int argc, char* argv[]){
                         land_mask[row][col] = 0;
                     }
                     else {
-                        land_mask[row][col] = local_max*p/(local_max*p+ghost_grid_ptr[(row+GHOSTS)*grid_ld[0]+col+GHOSTS]*(1-p));
+                        land_mask[row][col] = local_max*p/(local_max*p+ghost_grid_ptr[(row+ghost_width[0])*grid_ld[0]+col+ghost_width[1]]*(1-p));
                     }
                 }
             }
@@ -281,14 +281,14 @@ int main(int argc, char* argv[]){
                 cell_type land_grid_mean = 0;
                 for(int i = 0; i <= hi[0]-lo[0]; i++) {
                     for(int j = 0; j <= hi[1]-lo[1]; j++) {
-                        land_grid_mean += ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS];
+                        land_grid_mean += ghost_grid_ptr[(i+ghost_width[0])*grid_ld[0]+j+ghost_width[1]];
                     }
                 }
                 land_grid_mean /= (dims[0]*dims[1]);
                 MPI_Allreduce(MPI_IN_PLACE, &land_grid_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
                 for(int i = 0; i <= hi[0]-lo[0]; i++) {
                     for(int j = 0; j <= hi[1]-lo[1]; j++) {
-                        ghost_grid_ptr[(i+GHOSTS)*grid_ld[0]+j+GHOSTS] /= land_grid_mean; // normalize grid
+                        ghost_grid_ptr[(i+ghost_width[0])*grid_ld[0]+j+ghost_width[1]] /= land_grid_mean; // normalize grid
                     }
                 }
                 GA_Update_ghosts(ga_land_grid);
