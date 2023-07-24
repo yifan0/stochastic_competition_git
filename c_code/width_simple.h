@@ -18,8 +18,6 @@ using namespace std;
 
 // 2^1, 2^1.5, 2^2, ..., 2^11
 double* width_simple(string fname) {
-    // std::chrono::time_point<std::chrono::system_clock> width_L_start_time, width_L_end_time;
-    // string fname = "2D_landscape_2048_7/test_ga_2048_1_121_rep0_checkpoint14.csv";
     fstream file (fname, ios::in);
     vector<vector<double>> landscape;
     string line, word; 
@@ -45,7 +43,6 @@ double* width_simple(string fname) {
         cout<<"Could not open the file\n";
     }
     size = landscape[0].size();
-    
     int start_pt = 2;
     int end_pt = ((int) log2(size))*2;
     // cout << end_pt << endl;
@@ -56,7 +53,6 @@ double* width_simple(string fname) {
         // cout << "samp_size = " << samp_size << endl;
         // sample_list.push_back(log(samp_size));
         // cout << "p2 = " << p2 << endl;
-        // width_L_start_time = std::chrono::system_clock::now();
         int nsamp = size/samp_size;
         // if number of samples is > 256 or sample is the whole landscape
         if (nsamp > 16 || samp_size == size){
@@ -109,41 +105,29 @@ double* width_simple(string fname) {
             tempwidth /= (nsamp_new*nsamp_new);
             width_arr[p2-start_pt] = tempwidth;
         }
-        // width_L_end_time = std::chrono::system_clock::now();
-        // std::chrono::duration<double> width_L_time = width_L_end_time - width_L_start_time;
-        // cout << "p2 = " << p2 << "measure time = " << width_L_time.count() << endl;
     }
     return width_arr;
 }
 
 double* width_simple_parallel(string fname) {
-    // string fname = "2D_landscape_2048_7/test_ga_2048_1_121_rep0_checkpoint14.csv";
+    int size = 1024;
+    double landscape[size][size];
     fstream file (fname, ios::in);
-    vector<vector<double>> landscape;
-    string line, word; 
-    int size = 0;
-    // int nrep = 0;
-    if(file.is_open()){
-        while(getline(file,line)){
-            if (line == ""){
-                // nrep += 1;
-                // cout << landscape.size() << endl;
-                // skip empty line
-                continue;
+    if (GA_Nodeid()==0){
+        for (int i=0; i<size; i++){
+            string line;
+            getline(file, line);
+            stringstream str(line);
+            for (int j=0; j<size; j++){
+                string word;
+                getline(str, word, ',');
+                landscape[i][j] = log(stod(word));
             }
-            stringstream str(line); 
-            vector<double> row;
-            while (getline(str, word, ',')){
-                row.push_back(log(stod(word)));
-            }
-            landscape.push_back(row);
         }
     }
-    else {
-        cout<<"Could not open the file\n";
+    for (int i=0; i<size; i++){
+        MPI_Bcast(&landscape[i], size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     }
-    size = landscape[0].size();
-    
     int start_pt = 2;
     int end_pt = ((int) log2(size))*2;
     // cout << end_pt << endl;
@@ -207,7 +191,6 @@ double* width_simple_parallel(string fname) {
             tempwidth /= GA_Nnodes();
             width_arr[p2-start_pt] = tempwidth;
         }
-
     }
     return width_arr;
 }
