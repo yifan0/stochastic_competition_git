@@ -10,10 +10,10 @@
 #include <typeinfo>
 #include <set>
 #include "slope.h"
+#include <time.h>
+#include <chrono>
 using namespace std;
 
-#define println(...) { printf(__VA_ARGS__); printf("\n"); }
-#define print(...) { printf(__VA_ARGS__); }
 
 // width, slope of width
 tuple<array<double,10>,double> width1D(string fname) {
@@ -95,7 +95,7 @@ tuple<array<double,10>,double> width1D(string fname) {
 
 
 
-// width, slope of width
+// simple width
 double* width1D_simple(string fname) {
     int p2_start = 1;
     int p2_end = 20;
@@ -131,7 +131,7 @@ double* width1D_simple(string fname) {
         double tempwidth = 0;
         int nsamp = (int) size/samp_size;
         // cout << samp_size << endl;
-        if (nsamp > 128 || samp_size==size){
+        if (nsamp > 256 || samp_size==size){
         // if (true){
             for (int i=0; i<=nsamp-1; i++){
                 double tempmean = 0;
@@ -148,7 +148,7 @@ double* width1D_simple(string fname) {
             // cout << "nsamp = " << nsamp << endl;
         }
         else {
-            int nsamp_new = 128;
+            int nsamp_new = 256;
             int interval = (int) size/nsamp_new;
             for (int i=0; i<=nsamp_new-1; i++){
                 double tempmean = 0;
@@ -164,7 +164,103 @@ double* width1D_simple(string fname) {
             width_arr[p2-p2_start] = tempwidth;
             // cout << "nsamp_new = " << nsamp_new << endl;
         }
-        // cout << tempwidth << ",";
+        cout << "samp_size = " << samp_size << "\twidth = " << tempwidth << endl;
+    }
+    return width_arr;
+}
+
+
+// simple width, parallel
+double* width1D_simple_parallel(string fname) {
+    std::chrono::time_point<std::chrono::system_clock> load_start_time, load_end_time, width_L_start_time, width_L_end_time; 
+    int size = 1048576;
+    double landscape[size];
+    fstream file (fname, ios::in);
+    load_start_time = std::chrono::system_clock::now();
+    if (GA_Nodeid()==0){
+        string line;
+        getline(file,line);
+        stringstream str(line);
+        for (int i=0; i<size; i++){
+            string word;
+            getline(str, word, ',');
+            landscape[i] = log(stod(word));
+        }
+    }
+    MPI_Bcast(&landscape, size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    load_end_time = std::chrono::system_clock::now();
+    std::chrono::duration<double> load_time = load_end_time - load_start_time;
+    if (GA_Nodeid()==0){
+        cout << "load time = " << load_time.count() << endl;
+    }
+    // cout << size << endl;
+    // if (GA_Nodeid()==1){
+    //     set<double> distinct_species;
+    //     for (int i=0; i<size; i++){
+    //             distinct_species.insert(landscape[i]);
+    //     }
+    //     cout << "diversity = " << distinct_species.size() << endl;
+    // }
+    // if (GA_Nodeid()==1){
+    //     int boundary_count = 0;
+    //     for (int i=0; i<size; i++){
+    //         if (landscape[i] != landscape[(i-1+size)%size] || landscape[i] != landscape[(i+1)%size]){
+    //             boundary_count += 1;
+    //         }
+    //     }
+    //     cout << "actual landscape: number of cell on boundary = " << boundary_count << endl;
+    // }
+    int p2_start = 1;
+    int p2_end = 20;
+    int p2_range = p2_end-p2_start+1;
+    static double width_arr[20];
+    vector<double> sample_list;
+    for (int p2=p2_start; p2<=p2_end; ++p2){
+        int samp_size = pow(2,p2);
+        double tempwidth = 0;
+        int nsamp = (int) size/samp_size;
+        width_L_start_time = std::chrono::system_clock::now();
+        if (nsamp > 256 || samp_size==size){
+        // if (true){
+            for (int i=0; i<=nsamp-1; i++){
+                double tempmean = 0;
+                for (int ii=0; ii<samp_size; ii++){
+                    tempmean += landscape[i*samp_size+ii];
+                }
+                tempmean /= samp_size;
+                for (int ii=0; ii<samp_size; ii++){
+                    tempwidth += (landscape[i*samp_size+ii]-tempmean)*(landscape[i*samp_size+ii]-tempmean)/samp_size;
+                }
+            }
+            tempwidth /= nsamp;
+            width_arr[p2-p2_start] = tempwidth;
+            // cout << "nsamp = " << nsamp << endl;
+        }
+        else {
+            int nsamp_new = 256;
+            int interval = (int) size/nsamp_new;
+            int nsamp_per_node = nsamp_new/GA_Nnodes();
+            int i = GA_Nodeid();
+            for (int samp_index=0; samp_index<nsamp_per_node; samp_index++){
+                double tempmean = 0;
+                for (int ii=0; ii<samp_size; ii++){
+                    tempmean += landscape[((i+samp_index)*interval+ii)%size];
+                }
+                tempmean /= samp_size;
+                for (int ii=0; ii<samp_size; ii++){
+                    tempwidth += pow(landscape[((i+samp_index)*interval+ii)%size]-tempmean,2)/samp_size;
+                }
+            }
+            MPI_Allreduce(MPI_IN_PLACE, &tempwidth, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Barrier(MPI_COMM_WORLD);
+            tempwidth /= nsamp_new;
+            width_arr[p2-p2_start] = tempwidth;
+        }
+        width_L_end_time = std::chrono::system_clock::now();
+        std::chrono::duration<double> width_L_time = width_L_end_time - width_L_start_time;
+        // if (GA_Nodeid()==0){
+        //     cout << "samp_size = " << samp_size << "\t time = " << width_L_time.count() << "\twidth = " << tempwidth << endl;
+        // }
     }
     return width_arr;
 }
