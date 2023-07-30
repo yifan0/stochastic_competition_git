@@ -120,6 +120,11 @@ double* width1D_simple(string fname) {
     else {
         cout<<"Could not open the file\n";
     }
+    // set<double> distinct_species;
+    // for (int i=0; i<size; i++){
+    //         distinct_species.insert(landscape2[i]);
+    // }
+    // cout << "diversity = " << distinct_species.size() << endl;
     // cout << size << endl;
     static double width_arr[20];
     vector<double> sample_list;
@@ -164,7 +169,7 @@ double* width1D_simple(string fname) {
             width_arr[p2-p2_start] = tempwidth;
             // cout << "nsamp_new = " << nsamp_new << endl;
         }
-        cout << "samp_size = " << samp_size << "\twidth = " << tempwidth << endl;
+        // cout << "samp_size = " << samp_size << "\twidth = " << tempwidth << endl;
     }
     return width_arr;
 }
@@ -244,11 +249,11 @@ double* width1D_simple_parallel(string fname) {
             for (int samp_index=0; samp_index<nsamp_per_node; samp_index++){
                 double tempmean = 0;
                 for (int ii=0; ii<samp_size; ii++){
-                    tempmean += landscape[((i+samp_index)*interval+ii)%size];
+                    tempmean += landscape[((i*nsamp_per_node+samp_index)*interval+ii)%size];
                 }
                 tempmean /= samp_size;
                 for (int ii=0; ii<samp_size; ii++){
-                    tempwidth += pow(landscape[((i+samp_index)*interval+ii)%size]-tempmean,2)/samp_size;
+                    tempwidth += pow(landscape[((i*nsamp_per_node+samp_index)*interval+ii)%size]-tempmean,2)/samp_size;
                 }
             }
             MPI_Allreduce(MPI_IN_PLACE, &tempwidth, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
