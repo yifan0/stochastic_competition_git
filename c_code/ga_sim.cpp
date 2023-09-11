@@ -234,7 +234,6 @@ int main(int argc, char *argv[])
 									local_max = std::max(local_max, ghost_grid_ptr[(neighbor_row + GHOSTS) * ghost_grid_ld[0] + neighbor_col + GHOSTS]);
 								}
 							}
-							// TODO: is this the error spot?
 							if(row >= 0 && col >= 0 && row < local_rows && col < local_cols)
 								land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] * (1 - p));
 						}
@@ -375,19 +374,38 @@ int main(int argc, char *argv[])
 		fp = fopen(outfile.c_str(), "w");
 		GA_Print_csv_file(fp, ga_land_grid);
 		fclose(fp);
-		
+
+		// gather speciation events
 		vector<tuple<size_t, cell_type, cell_type>> global_speciation_events = mxx::gatherv(speciation_events, 0);
+		// gather extant species set
+		// TODO: make extant_species vector
+		debug("Gathering extant species list");
+		set<cell_type> extant_species(ghost_grid_ptr+GHOSTS*ghost_grid_ld[0]+GHOSTS, ghost_grid_ptr+(local_rows + GHOSTS) * ghost_grid_ld[0] + local_cols + GHOSTS);
+		vector<cell_type> extant_species_vec(extant_species.begin(), extant_species.end());
+		debug("Local extant species: %d", extant_species.size());
+		vector<cell_type> global_extant_species_vec = mxx::gatherv(extant_species_vec, 0);
 		if (me == 0)
 		{
+			set<cell_type> global_extant_species(global_extant_species_vec.begin(), global_extant_species_vec.end());
+			debug("Global extant species: %d", global_extant_species.size());
+			// TODO: take this out
+			for(cell_type x : global_extant_species) {
+				debug("%f", x);
+			}
+			map<cell_type, speciation_tree_node*> leaves;
 			// sort global_speciation_events by timestep
 			sort(global_speciation_events.begin(), global_speciation_events.end());
 			speciation_tree_node *tree = new speciation_tree_node(get<1>(global_speciation_events[0]), 0, nullptr);
+			leaves[get<1>(global_speciation_events[0])] = tree;
+			debug("Creating tree");
 			for (tuple<size_t, cell_type, cell_type> event : global_speciation_events)
 			{
 				size_t timestep = get<0>(event);
 				cell_type old_val = get<1>(event);
 				cell_type new_val = get<2>(event);
-				speciation_tree_node *parent_node = find_node(tree, old_val);
+				// instead of finding the node by traversing the tree, just look it up in a hash map (for performance)
+				// speciation_tree_node *parent_node = find_node(tree, old_val);
+				speciation_tree_node *parent_node = leaves[old_val];
 				if (!parent_node)
 				{
 					char find_err[] = "Did not find node with value";
@@ -400,7 +418,25 @@ int main(int argc, char *argv[])
 				speciation_tree_node *new_child = new speciation_tree_node(new_val, timestep, parent_node);
 				parent_node->left_child = old_child;
 				parent_node->right_child = new_child;
+				leaves[old_val] = old_child;
+				leaves[new_val] = new_child;
 			}
+
+			// prune extinct species
+			debug("Binary tree: %d", binaryTree(tree));
+			debug("Pruning tree");
+			// NOTE: the tree is binary before pruning
+			tree = prune(tree, global_extant_species);
+			debug("Pruned, root time = %d", tree->time);
+
+			// TODO: solve the problem that the tree is not binary
+
+			debug("Binary tree: %d", binaryTree(tree));
+
+			// prune(tree, global_extant_species);
+			// TODO: the pruning isn't working, correct it -- there are too many species in the tree
+			// TODO: test the pruning
+
 			outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".tree";
 			ofstream fout(outfile.c_str());
 			fout << toString_final(tree, timescale) << endl;

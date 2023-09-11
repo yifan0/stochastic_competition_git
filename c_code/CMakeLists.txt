@@ -12,7 +12,12 @@ FetchContent_Declare(
     globalarrays
     GIT_REPOSITORY https://github.com/kodingkoning/ga.git
 )
+FetchContent_Declare(
+    mxx
+    GIT_REPOSITORY https://github.com/patflick/mxx.git
+)
 FetchContent_MakeAvailable(globalarrays)
+FetchContent_MakeAvailable(mxx)
 
 include_directories(agner_random include)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -std=c++17")
@@ -37,6 +42,7 @@ target_include_directories(ga_sim PUBLIC ${globalarrays_SOURCE_DIR}/ga++/src)
 target_include_directories(ga_sim PUBLIC ${globalarrays_SOURCE_DIR}/global/src)
 target_include_directories(ga_sim PUBLIC ${globalarrays_BINARY_DIR}/ma)
 target_include_directories(ga_sim PUBLIC ${globalarrays_BINARY_DIR}/gaf2c)
+target_include_directories(ga_sim PUBLIC ${mxx_SOURCE_DIR}/include)
 
 target_include_directories(ga_sim1D PUBLIC ${globalarrays_SOURCE_DIR}/ma)
 target_include_directories(ga_sim1D PUBLIC ${globalarrays_SOURCE_DIR}/ga++/src)

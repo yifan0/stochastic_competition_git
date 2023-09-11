@@ -3,11 +3,13 @@
 #include <tuple>
 #include <set>
 #include <iostream>
+#include <unordered_map>
 using namespace std;
 
 #ifndef TREE_
 
 #define println(...) { printf(__VA_ARGS__); printf("\n"); }
+#define debug(...) { if(true) { printf("Rank %d: ", 0); printf(__VA_ARGS__); printf("\n"); fflush(stdout); } }
 // global variable indicating if there is a missed extinct species
 inline bool missed;
 
@@ -25,20 +27,38 @@ struct speciation_tree_node {
     }
 };
 
-typedef std::tuple<int, int, speciation_tree_node*> cell_update;
-
 speciation_tree_node* find_node(speciation_tree_node* root, cell_type target) {
     if(root->val == target) {
+        if(root->right_child && root->right_child->val == target)
+            return find_node(root->right_child, target);
+	if(root->left_child && root->left_child->val == target)
+            return find_node(root->left_child, target);
         return root;
     }
 
-    speciation_tree_node* result = find_node(root->right_child, target);
-    if(result != nullptr) return result;
-    
-    result = find_node(root->left_child, target);
-    if(result != nullptr) return result;
+    speciation_tree_node* result = nullptr;
+    if(root->right_child) {
+	    result = find_node(root->right_child, target);
+	    if(result) return result;
+    }
 
+    if(root->left_child) {
+	    result = find_node(root->left_child, target);
+	    if(result) return result;
+    }
     return nullptr;
+}
+
+string testPrint(speciation_tree_node* root) {
+	if(root->left_child && !root->right_child) {
+		return "(," + testPrint(root->left_child) + ")" + to_string(root->val);
+	} else if(!root->left_child && root->right_child) {
+		return "(" + testPrint(root->right_child) + ",)" + to_string(root->val);
+	} else if(root->left_child && root->right_child) {
+		return "(" + testPrint(root->right_child) + "," + testPrint(root->left_child) + ")" + to_string(root->val);
+	} else {
+		return to_string(root->val);
+	}
 }
 
 // caller is responsible for adding a semicolon at the end
@@ -98,7 +118,12 @@ size_t get_depth(speciation_tree_node* root) {
 
 void speciation_event(speciation_tree_node* old_species, speciation_tree_node* new_species) {
     // only occurs at the first speciation event
-    if(old_species->parent->left_child == nullptr) {
+    if(old_species->parent == nullptr) {
+	    speciation_tree_node* child_node = new speciation_tree_node(old_species->val, old_species->time, old_species);
+	    old_species->left_child = child_node;
+	    old_species->right_child = new_species;
+	    return;
+    } else if(old_species->parent->left_child == nullptr) {
         old_species->parent->left_child = new_species;
         new_species->parent = old_species->parent;
         return;
@@ -132,6 +157,67 @@ void normalize(speciation_tree_node* root, cell_type avg) {
     root->val = root->val/avg;
     normalize(root->left_child, avg);
     normalize(root->right_child, avg);
+}
+
+bool binaryTree(speciation_tree_node* node) {
+    if(node->left_child == nullptr && node->right_child == nullptr) {
+        return true;
+    } else if(node->left_child == nullptr || node->right_child == nullptr) {
+        return false;
+    } else {
+        return binaryTree(node->left_child) && binaryTree(node->right_child);
+    }
+}
+
+bool isLeaf(speciation_tree_node* node) {
+    return (node->left_child == nullptr && node->right_child == nullptr);
+}
+
+bool nonbinaryNode(speciation_tree_node* node) {
+    return (!isLeaf(node) && (node->left_child == nullptr || node->right_child == nullptr));
+}
+
+// pruning algorithm
+// while there are more leaves than species, prune the leaves that are extinct
+//  for every leaf, check if it is extinct
+//    if it is extent, then do nothing
+//    if it is extinct, then check if its sibling is a leaf
+//    if its sibling is an internal node or an extant leaf, then remove the current node and promote it sibling to replace the parent
+//    if its sibling is an exinct leaf, then remove both the leaf and its sibling, and make the parent a leaf
+speciation_tree_node* prune(speciation_tree_node* node, const std::set<cell_type>& extant_species) {
+    if (node == nullptr) {
+        return nullptr;
+    }
+
+    // Recursively prune the left and right subtrees
+    node->left_child = prune(node->left_child, extant_species);
+    node->right_child = prune(node->right_child, extant_species);
+
+    // If the node is a leaf and not in extant_species, delete it
+    if (node->left_child == nullptr && node->right_child == nullptr &&
+        extant_species.find(node->val) == extant_species.end()) {
+        delete node;
+        return nullptr;
+    }
+
+    // If the node has only one child, return its child
+    if (node->left_child == nullptr && node->right_child != nullptr) {
+        speciation_tree_node* right_child = node->right_child;
+        right_child->time = node->time;
+        right_child->parent = node->parent;
+        delete node;
+        return right_child;
+    }
+    if (node->left_child != nullptr && node->right_child == nullptr) {
+        speciation_tree_node* left_child = node->left_child;
+        left_child->time = node->time;
+        left_child->parent = node->parent;
+        delete node;
+        return left_child;
+    }
+
+    // If the node has two children, return it unchanged
+    return node;
 }
 
 void prune(speciation_tree_node* root, set<speciation_tree_node*> species) {
