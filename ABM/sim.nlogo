@@ -5,9 +5,6 @@ globals
   world_size
   p
   timescale
-  mutsize
-  specrate
-  invrate
 ]
 
 patches-own [
@@ -20,18 +17,17 @@ to setup
     set pcolor 1
     set value 1.0
   ]
-  set specrate 0.0001
-  set mutsize 0.1
-  set invrate 0.2
-  set p 0.1
+  set p 1 / individuals-per-patch
   set world_size ( world-width ) * ( world-height )
   set timescale (100 * (world_size * 1.0 * p))
+  output-print (word "Timescale = " timescale)
+  clear-all-plots
   reset-ticks
 end
 
 to go
   ;; speciation
-  ask n-of (random-poisson specrate * world_size) patches
+  ask n-of min list (random-poisson (specrate * world_size)) (world_size) patches
   [
     ;; speciate
     let ratio (1 + random-float 1.0 * mutsize)
@@ -68,11 +64,11 @@ end
 GRAPHICS-WINDOW
 210
 10
-418
-219
+718
+519
 -1
 -1
-2.0
+5.0
 1
 10
 1
@@ -93,10 +89,10 @@ ticks
 500.0
 
 BUTTON
-59
-175
-114
-208
+37
+538
+92
+571
 go
 go
 T
@@ -110,10 +106,10 @@ NIL
 1
 
 BUTTON
-59
-106
-126
-139
+37
+469
+104
+502
 setup
 setup
 NIL
@@ -125,6 +121,156 @@ NIL
 NIL
 NIL
 1
+
+PLOT
+769
+19
+969
+169
+Mean Lifehistory Value
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot mean [value] of patches"
+
+PLOT
+769
+196
+969
+346
+Lifehistory Variance
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot max [value] of patches - min [value] of patches"
+
+INPUTBOX
+5
+20
+166
+80
+invrate
+0.2
+1
+0
+Number
+
+INPUTBOX
+6
+141
+167
+201
+mutsize
+0.1
+1
+0
+Number
+
+SLIDER
+6
+90
+178
+123
+invrate
+invrate
+0
+1
+0.2
+0.00001
+1
+NIL
+HORIZONTAL
+
+INPUTBOX
+8
+247
+169
+307
+specrate
+0.01
+1
+0
+Number
+
+SLIDER
+6
+207
+178
+240
+mutsize
+mutsize
+0
+100
+0.1
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+10
+317
+182
+350
+specrate
+specrate
+0
+1
+0.01
+0.0001
+1
+NIL
+HORIZONTAL
+
+INPUTBOX
+10
+365
+171
+425
+individuals-per-patch
+10.0
+1
+0
+Number
+
+PLOT
+770
+374
+970
+524
+Unique Species
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot length remove-duplicates [value] of patches"
+
+OUTPUT
+211
+544
+451
+598
+12
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -472,6 +618,16 @@ NetLogo 6.3.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="experiment" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <final>export-view "test_out.png"</final>
+    <metric>max [value] of patches - min [value] of patches</metric>
+    <metric>mean [value] of patches</metric>
+    <metric>length remove-duplicates [value] of patches</metric>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
