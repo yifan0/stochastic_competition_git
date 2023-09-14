@@ -59,6 +59,15 @@ to go
       ;; get random neighbor with weighted probabilities based on inv_sum
     ]
   ]
+  if normalize
+  [
+    ;; divide all values by the mean
+    let mean_val (mean [value] of patches)
+    ask patches
+    [
+      set value (value / mean_val)
+    ]
+  ]
   tick
   if (ticks > timescale) [stop]
 end
@@ -151,9 +160,9 @@ Lifehistory Variance
 NIL
 NIL
 0.0
-10.0
+1.0
 0.0
-10.0
+1.0
 true
 false
 "" ""
@@ -284,6 +293,17 @@ plot-interval
 1
 0
 Number
+
+SWITCH
+525
+548
+646
+581
+normalize
+normalize
+0
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
