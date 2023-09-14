@@ -19,43 +19,45 @@ to setup
   ]
   set p 1 / individuals-per-patch
   set world_size ( world-width ) * ( world-height )
-  set timescale (100 * (world_size * 1.0 * p))
-  output-print (word "Timescale = " timescale)
+  set timescale (100 * (world_size * 1.0 * p) / plot-interval)
+  output-print (word "Timescale = " (timescale * plot-interval))
   clear-all-plots
   reset-ticks
 end
 
 to go
-  ;; speciation
-  ask n-of min list (random-poisson (specrate * world_size)) (world_size) patches
-  [
-    ;; speciate
-    let ratio (1 + random-float 1.0 * mutsize)
-    if random 2 = 0 [ set ratio (1 / ratio) ]
-    let probsuccess (p * ratio / (p * (ratio - 1) + 1))
-    if random-float 1.0 <= probsuccess
+  repeat plot-interval [
+    ;; speciation
+    ask n-of min list (random-poisson (specrate * world_size)) (world_size) patches
     [
-      set value (value * ratio)
-      set pcolor value
-    ]
-  ]
-  ;; invasion
-  ask patches
-  [
-    ;; calculate sum of neighbor values
-    let inv_sum sum [value] of neighbors
-    let randval (random-float 1.0)
-    if randval <= inv_sum / 8
-    [
-      let tmp_value value
-      ask rnd:weighted-one-of neighbors [ value ] [
-        set tmp_value value
+      ;; speciate
+      let ratio (1 + random-float 1.0 * mutsize)
+      if random 2 = 0 [ set ratio (1 / ratio) ]
+      let probsuccess (p * ratio / (p * (ratio - 1) + 1))
+      if random-float 1.0 <= probsuccess
+      [
+        set value (value * ratio)
+        set pcolor value
       ]
-      set value tmp_value ;; set to value of the random neighbor
-      set pcolor value
     ]
-    ;; if randval is <= inv_sum / 8, continue
-    ;; get random neighbor with weighted probabilities based on inv_sum
+    ;; invasion
+    ask patches
+    [
+      ;; calculate sum of neighbor values
+      let inv_sum sum [value] of neighbors
+      let randval (random-float 1.0)
+      if randval <= inv_sum / 8
+      [
+        let tmp_value value
+        ask rnd:weighted-one-of neighbors [ value ] [
+          set tmp_value value
+        ]
+        set value tmp_value ;; set to value of the random neighbor
+        set pcolor value
+      ]
+      ;; if randval is <= inv_sum / 8, continue
+      ;; get random neighbor with weighted probabilities based on inv_sum
+    ]
   ]
   tick
   if (ticks > timescale) [stop]
@@ -106,10 +108,10 @@ NIL
 1
 
 BUTTON
-37
-469
-104
-502
+31
+501
+98
+534
 setup
 setup
 NIL
@@ -271,6 +273,17 @@ OUTPUT
 451
 598
 12
+
+INPUTBOX
+10
+436
+171
+496
+plot-interval
+10.0
+1
+0
+Number
 
 @#$#@#$#@
 ## WHAT IS IT?
