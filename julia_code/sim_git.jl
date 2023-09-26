@@ -1,12 +1,26 @@
 # Simulate 2D life history ecosystem with speciation and invasion rules
-using DynamicGrids, Crayons, StatsBase, Plots, DataFrames, GLM, Random, JLD
+using DynamicGrids, Crayons, StatsBase, Plots, DataFrames, GLM, Random, JLD, ArgParse
+
+s = ArgParseSettings()
+@add_arg_table s begin
+    "--size"
+        help="Size of the grid"
+        default=100
+        arg_type=Int
+    "--reps"
+        help = "number of repetitions"
+        arg_type = Int
+        default = 1
+end
+args = parse_args(ARGS, s)
+
 Random.seed!(1234)
 
 # 10 independent simulations of 128X128 system
 # no biological reason for using 10
 # size should be large enough (compared with speciation rate) such that there are enough species generated.
-nrep=1
-size = 128
+nrep=args["reps"]
+size = args["size"]
 
 # Each patch is initialized to have a species with 1.0 effective population (fitness)
 landrept = fill(1.0,size,size,nrep)
@@ -17,7 +31,7 @@ p = .1
 
 # mutation size is 0.1
 # no biological reason for 0.1. smaller mutation size may give less fluctuating results in variance measurement
-mutsize = 0.1
+mutsize = 0.2
 
 # speciation rate is 1.0e-4
 # We try to push speciation rate to be as small as possible
@@ -44,11 +58,12 @@ println("\tspeciation rate = ", specrate)
 println("\ttimescale = ", timescale)
 println("\tnsteps = ", nsteps)
 println("\tend time = ", endtime)
+println("\tthreads = ", Threads.nthreads())
 
 
 # Speciation rule (uses DynamicGrids package)
 # TODO: link prob_mut and mutsize to the variables
-spec_rule = let prob_mut=specrate, mutsize = 0.1
+spec_rule = let prob_mut=specrate, mutsize = 0.2
     Cell() do data, cell, I
         randvalue = rand() # a mutation occurs with probability prob_mut*probsuccess, so if the randvalue > prob_mut, the mutation cannot occur
         if randvalue < prob_mut
