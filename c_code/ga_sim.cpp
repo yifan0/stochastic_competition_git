@@ -389,9 +389,9 @@ int main(int argc, char *argv[])
 			set<cell_type> global_extant_species(global_extant_species_vec.begin(), global_extant_species_vec.end());
 			debug("Global extant species: %d", global_extant_species.size());
 			// TODO: take this out
-			for(cell_type x : global_extant_species) {
-				debug("%f", x);
-			}
+			// for(cell_type x : global_extant_species) {
+			// 	debug("%f", x);
+			// }
 			map<cell_type, speciation_tree_node*> leaves;
 			// sort global_speciation_events by timestep
 			sort(global_speciation_events.begin(), global_speciation_events.end());
