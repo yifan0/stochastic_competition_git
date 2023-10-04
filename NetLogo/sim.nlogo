@@ -12,6 +12,7 @@ patches-own [
 ]
 
 to setup
+  set specrate 0.0001
   ask patches
   [
     set pcolor 1
@@ -212,7 +213,7 @@ INPUTBOX
 169
 307
 specrate
-0.01
+0.0001
 1
 0
 Number
