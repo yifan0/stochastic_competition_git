@@ -19,7 +19,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(globalarrays)
 FetchContent_MakeAvailable(mxx)
 
-include_directories(agner_random include)
+add_subdirectory(agner_random)
+include_directories(include)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -std=c++17")
 
 set(targets
@@ -36,6 +37,7 @@ set(targets
 foreach(TARGET ${targets})
     add_executable(${TARGET} "${TARGET}.cpp")
     target_compile_features(${TARGET} PUBLIC cxx_std_17)
+    target_include_directories(${TARGET} PUBLIC ${PROJECT_SOURCE_DIR}/agner_random)
 endforeach(TARGET)
 
 target_include_directories(ga_sim PUBLIC ${globalarrays_SOURCE_DIR}/ma)
@@ -64,8 +66,8 @@ target_include_directories(ga_sim1D_hydro PUBLIC ${globalarrays_SOURCE_DIR}/glob
 target_include_directories(ga_sim1D_hydro PUBLIC ${globalarrays_BINARY_DIR}/ma)
 target_include_directories(ga_sim1D_hydro PUBLIC ${globalarrays_BINARY_DIR}/gaf2c)
 
-target_link_libraries(ga_sim GlobalArrays::ga MPI::MPI_CXX)
-target_link_libraries(ga_sim_no_tree GlobalArrays::ga MPI::MPI_CXX)
+target_link_libraries(ga_sim GlobalArrays::ga MPI::MPI_CXX Agner)
+target_link_libraries(ga_sim_no_tree GlobalArrays::ga MPI::MPI_CXX Agner)
 target_link_libraries(ga_sim1D GlobalArrays::ga MPI::MPI_CXX)
 target_link_libraries(ga_sim1D_hydro GlobalArrays::ga MPI::MPI_CXX)
 target_link_libraries(omp_sim PUBLIC OpenMP::OpenMP_CXX)

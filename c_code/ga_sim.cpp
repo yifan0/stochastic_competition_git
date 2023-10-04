@@ -14,6 +14,8 @@
 #include "sfmt.cpp"
 #include "userintf.cpp"
 #include "macdecls.h"
+#include "stocc.h"
+#include "stoc1.cpp"
 #include <mpi.h>
 #include <iostream>	   // std::cout
 #include <fstream>	   // std::ofstream
@@ -136,6 +138,7 @@ int main(int argc, char *argv[])
 
 	// Random number generation
 	CRandomSFMT1 RanGen(time(0) + me * 10); // Agner Combined generator
+	StochasticLib1 sto(time(0) + me * 7);	// Stochastic RNG
 	int local_rows = (hi[0] - lo[0] + 1);
 	int local_cols = (hi[1] - lo[1] + 1);
 	int local_area = local_cols * local_rows;
@@ -143,9 +146,6 @@ int main(int argc, char *argv[])
 	double* land_mask[local_rows];
 	for (size_t i = 0; i < local_rows; i++)
 		land_mask[i] = land_mask_data + i * local_cols;
-	// distribution for speciation events
-	std::default_random_engine generator;
-	std::binomial_distribution<int> speciation_distribution(local_area, specrate);
 
 	for (int rep = 0; rep < nrep; rep++)
 	{
@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
 		{
 
 			// speciation rule
-			int speciation_event_count = speciation_distribution(generator);
+			int speciation_event_count = sto.Binomial(local_area, specrate);
 			std::set<int> spec_events;
 			while (spec_events.size() < speciation_event_count)
 			{
