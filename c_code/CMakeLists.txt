@@ -26,6 +26,7 @@ set(targets
     sim
     omp_sim
     ga_sim
+    ga_sim_no_tree
     ga_sim1D
     ga_sim1D_hydro
     benchmark
@@ -44,6 +45,13 @@ target_include_directories(ga_sim PUBLIC ${globalarrays_BINARY_DIR}/ma)
 target_include_directories(ga_sim PUBLIC ${globalarrays_BINARY_DIR}/gaf2c)
 target_include_directories(ga_sim PUBLIC ${mxx_SOURCE_DIR}/include)
 
+target_include_directories(ga_sim_no_tree PUBLIC ${globalarrays_SOURCE_DIR}/ma)
+target_include_directories(ga_sim_no_tree PUBLIC ${globalarrays_SOURCE_DIR}/ga++/src)
+target_include_directories(ga_sim_no_tree PUBLIC ${globalarrays_SOURCE_DIR}/global/src)
+target_include_directories(ga_sim_no_tree PUBLIC ${globalarrays_BINARY_DIR}/ma)
+target_include_directories(ga_sim_no_tree PUBLIC ${globalarrays_BINARY_DIR}/gaf2c)
+target_include_directories(ga_sim_no_tree PUBLIC ${mxx_SOURCE_DIR}/include)
+
 target_include_directories(ga_sim1D PUBLIC ${globalarrays_SOURCE_DIR}/ma)
 target_include_directories(ga_sim1D PUBLIC ${globalarrays_SOURCE_DIR}/ga++/src)
 target_include_directories(ga_sim1D PUBLIC ${globalarrays_SOURCE_DIR}/global/src)
@@ -57,6 +65,7 @@ target_include_directories(ga_sim1D_hydro PUBLIC ${globalarrays_BINARY_DIR}/ma)
 target_include_directories(ga_sim1D_hydro PUBLIC ${globalarrays_BINARY_DIR}/gaf2c)
 
 target_link_libraries(ga_sim GlobalArrays::ga MPI::MPI_CXX)
+target_link_libraries(ga_sim_no_tree GlobalArrays::ga MPI::MPI_CXX)
 target_link_libraries(ga_sim1D GlobalArrays::ga MPI::MPI_CXX)
 target_link_libraries(ga_sim1D_hydro GlobalArrays::ga MPI::MPI_CXX)
 target_link_libraries(omp_sim PUBLIC OpenMP::OpenMP_CXX)
