@@ -49,8 +49,7 @@ set<int> event_list(CRandomSFMT1& rng, StochasticLib1& srng, size_t n, double p)
 }
 
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
 	int nrep = 10;
 	int size = 100;
 	double p = 0.1;
@@ -96,8 +95,7 @@ int main(int argc, char *argv[])
 
 	auto result = options.parse(argc, argv);
 
-	if (result.count("help"))
-	{
+	if (result.count("help")) {
 		if (me == 0)
 			std::cout << options.help() << std::endl;
 		MPI_Finalize();
@@ -115,22 +113,19 @@ int main(int argc, char *argv[])
 
 	// grid for average across reps
 	GA_Mask_sync(0, 0); // turns off sync when updating ghosts
-	for (size_t i = 0; i < NDIM; i++)
-	{
+	for (size_t i = 0; i < NDIM; i++) {
 		dims[i] = size;
 		ghost_width[i] = GHOSTS;
 	}
 	char land_grid_name[] = "land grid";
 	int ga_land_grid = NGA_Create_ghosts(C_DBL, NDIM, dims, ghost_width, land_grid_name, NULL);
-	if (ga_land_grid == 0)
-	{
+	if (ga_land_grid == 0) {
 		char create_err[] = "Failure for NGA_Create_ghosts()";
 		GA_Error(create_err, 1);
 	}
 
 	NGA_Distribution(ga_land_grid, me, lo, hi);
-	if (lo[0] < 0)
-	{
+	if (lo[0] < 0) {
 		debug("Owns no elements");
 		return 1;
 	}
@@ -160,29 +155,25 @@ int main(int argc, char *argv[])
 	for (size_t i = 0; i < local_rows; i++)
 		land_mask[i] = land_mask_data + i * local_cols;
 
-	for (int rep = 0; rep < nrep; rep++)
-	{
+	for (int rep = 0; rep < nrep; rep++) {
 		rep_start_time = std::chrono::system_clock::now();
 
 		double one = 1;
 		GA_Fill(ga_land_grid, &one);
 		GA_Update_ghosts(ga_land_grid);
 		NGA_Access_ghosts(ga_land_grid, ghost_dims, &ghost_grid_ptr, ghost_grid_ld);
-		if (!ghost_grid_ptr)
-		{
+		if (!ghost_grid_ptr) {
 			char grid_err[] = "NULL pointer for ghost grid.";
 			GA_Error(grid_err, 1);
 		}
 
 		// zero out mask except local edges
 		memset(land_mask_data, 0, sizeof(*land_mask_data));
-		for (size_t i = 0; i < local_rows; i++)
-		{
+		for (size_t i = 0; i < local_rows; i++) {
 			land_mask[i][0] = 1;
 			land_mask[i][local_cols - 1] = 1;
 		}
-		for (size_t i = 0; i < local_cols; i++)
-		{
+		for (size_t i = 0; i < local_cols; i++) {
 			land_mask[0][i] = 1;
 			land_mask[local_rows - 1][i] = 1;
 		}
@@ -197,8 +188,7 @@ int main(int argc, char *argv[])
 		vector<tuple<size_t, cell_type, cell_type>> speciation_events;
 
 		int row, col;
-		for (int step = 0; step < timescale; step++)
-		{
+		for (int step = 0; step < timescale; step++) {
 
 			// speciation rule
 			set<int> spec_events = event_list(RanGen, sto, local_area, specrate);
@@ -243,23 +233,16 @@ int main(int argc, char *argv[])
 
 			// invasion rule
 			std::vector<cell_update> updates;
-			for (size_t i = 0; i < local_rows; i++)
-			{
-				for (size_t j = 0; j < local_cols; j++)
-				{
-					if (land_mask[i][j] != 0)
-					{
+			for (size_t i = 0; i < local_rows; i++) {
+				for (size_t j = 0; j < local_cols; j++) {
+					if (land_mask[i][j] != 0) {
 						double randval = RanGen.Random(); //random_float();
-						if (randval < land_mask[i][j])
-						{
+						if (randval < land_mask[i][j]) {
 							inv_sum = 0;
 							inv_index = 0;
-							for (int x = -1; x <= 1; x++)
-							{
-								for (int y = -1; y <= 1; y++)
-								{
-									if ((x != 0 || y != 0))
-									{
+							for (int x = -1; x <= 1; x++) {
+								for (int y = -1; y <= 1; y++) {
+									if ((x != 0 || y != 0)) {
 										neighborhood[inv_index] = ghost_grid_ptr[(i + x + GHOSTS) * ghost_grid_ld[0] + j + y + GHOSTS];
 										inv[inv_index] = p * neighborhood[inv_index] / (p * neighborhood[inv_index] + ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] * (1 - p));
 										inv_sum += inv[inv_index];
@@ -267,18 +250,15 @@ int main(int argc, char *argv[])
 									}
 								}
 							}
-							if (randval <= inv_sum / 8)
-							{
+							if (randval <= inv_sum / 8) {
 								// Get random element with weighted probabilities
 								double weighted_rand = RanGen.Random() * inv_sum;
 								inv_index = 0;
-								while (weighted_rand > inv[inv_index])
-								{
+								while (weighted_rand > inv[inv_index]) {
 									weighted_rand -= inv[inv_index];
 									inv_index++;
 								}
-								if (neighborhood[inv_index] != ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS])
-								{
+								if (neighborhood[inv_index] != ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS]) {
 									updates.push_back({i, j, neighborhood[inv_index]});
 								}
 							}
@@ -287,13 +267,10 @@ int main(int argc, char *argv[])
 				}
 			}
 			
-			for (const auto &[i, j, val] : updates)
-			{
+			for (const auto &[i, j, val] : updates) {
 				ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] = val;
-				for (int x = -1; x <= 1; x++)
-				{
-					for (int y = -1; y <= 1; y++)
-					{
+				for (int x = -1; x <= 1; x++) {
+					for (int y = -1; y <= 1; y++) {
 						row = i + x;
 						col = j + y;
 						if (row >= local_rows - 1 || row <= 0)
@@ -301,31 +278,26 @@ int main(int argc, char *argv[])
 						if (col >= local_cols - 1 || col <= 0)
 							continue;
 						cell_type local_max = 0;
-						for (int xx = -1; xx <= 1; xx++)
-						{
-							for (int yy = -1; yy <= 1; yy++)
-							{
+						for (int xx = -1; xx <= 1; xx++) {
+							for (int yy = -1; yy <= 1; yy++) {
 								row = i + x + xx;
 								col = j + y + yy;
 								if (row >= local_rows - 1 || row <= 0)
 									continue;
 								if (col >= local_cols - 1 || col <= 0)
 									continue;
-								if (ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] != val && ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] > local_max)
-								{
+								if (ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] != val && ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] > local_max) {
 									local_max = ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS];
 								}
 							}
 						}
 						row = i + x;
 						col = j + y;
-						if (local_max == 0)
-						{
+						if (local_max == 0) {
 							if(row >= 0 && col >= 0 && row < local_rows && col < local_cols)
 								land_mask[row][col] = 0;
 						}
-						else
-						{
+						else {
 							if(row >= 0 && col >= 0 && row < local_rows && col < local_cols)
 								land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] * (1 - p));
 						}
@@ -334,8 +306,7 @@ int main(int argc, char *argv[])
 			}
 
 			// renormalize every nstep steps
-			if (step % endtime == endtime - 1)
-			{
+			if (step % endtime == endtime - 1) {
 				cell_type land_grid_mean = 0;
 				for (size_t i = 0; i < local_rows; i++)
 					for (size_t j = 0; j < local_cols; j++)
@@ -344,8 +315,7 @@ int main(int argc, char *argv[])
 				MPI_Allreduce(MPI_IN_PLACE, &land_grid_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 				println("Global average at step %d = %f", step, land_grid_mean);
 				// TODO: pick a useful threshold for when to normalize
-				if (land_grid_mean > 100)
-				{
+				if (land_grid_mean > 100) {
 					if (me == 0)
 						println("Normalizing by %f", land_grid_mean);
 
@@ -381,8 +351,7 @@ int main(int argc, char *argv[])
 		vector<cell_type> extant_species_vec(extant_species.begin(), extant_species.end());
 		debug("Local extant species: %d", extant_species.size());
 		vector<cell_type> global_extant_species_vec = mxx::gatherv(extant_species_vec, 0);
-		if (me == 0)
-		{
+		if (me == 0) {
 			set<cell_type> global_extant_species(global_extant_species_vec.begin(), global_extant_species_vec.end());
 			debug("Global extant species: %d", global_extant_species.size());
 			// TODO: take this out
@@ -395,16 +364,14 @@ int main(int argc, char *argv[])
 			speciation_tree_node *tree = new speciation_tree_node(get<1>(global_speciation_events[0]), 0, nullptr);
 			leaves[get<1>(global_speciation_events[0])] = tree;
 			debug("Creating tree");
-			for (tuple<size_t, cell_type, cell_type> event : global_speciation_events)
-			{
+			for (tuple<size_t, cell_type, cell_type> event : global_speciation_events) {
 				size_t timestep = get<0>(event);
 				cell_type old_val = get<1>(event);
 				cell_type new_val = get<2>(event);
 				// instead of finding the node by traversing the tree, just look it up in a hash map (for performance)
 				// speciation_tree_node *parent_node = find_node(tree, old_val);
 				speciation_tree_node *parent_node = leaves[old_val];
-				if (!parent_node)
-				{
+				if (!parent_node) {
 					char find_err[] = "Did not find node with value";
 					debug("Error: did not find node with value %f", old_val);
 					debug("%s", toString_final(tree, timescale).c_str());
