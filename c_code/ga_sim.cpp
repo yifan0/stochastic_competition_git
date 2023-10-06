@@ -34,6 +34,21 @@ using namespace std;
 
 typedef std::tuple<int, int, cell_type> cell_update;
 
+// Select locations of events based on probability p events in area 0 to n
+// return: vector of event locations
+set<int> event_list(CRandomSFMT1& rng, StochasticLib1& srng, size_t n, double p) {
+	size_t count = srng.Binomial(n, p);
+	set<int> events;
+	while (events.size() < count) {
+		int index = rng.IRandomX(0,n-1);
+		if(!events.count(index)) {
+			events.insert(index);
+		}
+	}
+	return events;
+}
+
+
 int main(int argc, char *argv[])
 {
 	int nrep = 10;
@@ -188,55 +203,39 @@ int main(int argc, char *argv[])
 		{
 
 			// speciation rule
-			int speciation_event_count = sto.Binomial(local_area, specrate);
-			std::set<int> spec_events;
-			while (spec_events.size() < speciation_event_count)
-			{
-				int index = rand() % local_area;
-				if (!spec_events.count(index))
-				{
-					size_t i = index / local_cols; // row
-					size_t j = index % local_cols; // col
-					spec_events.insert(index);
-					int down = rand() % 2;
-					float ratio = (1 + RanGen.Random() * mutsize);
-					if (down)
-					{
-						ratio = 1 / ratio;
-					}
-					float probsuccess = p * ratio / (p * (ratio - 1) + 1);
-					if (RanGen.Random() <= probsuccess)
-					{
-						cell_type old_val = ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS];
-						cell_type new_val = old_val * ratio;
-						ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] = new_val;
-						speciation_events.push_back(make_tuple(step, old_val, new_val));
-					}
+			set<int> spec_events = event_list(RanGen, sto, local_area, specrate);
+			for(int index : spec_events) {
+				size_t i = index / local_cols; // row
+				size_t j = index % local_cols; // col
+				float ratio = (1 + RanGen.Random() * mutsize);
+				if (RanGen.Random() < 0.5) ratio = 1 / ratio;
+				float probsuccess = p * ratio / (p * (ratio - 1) + 1);
+				if (RanGen.Random() <= probsuccess) {
+					cell_type old_val = ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS];
+					cell_type new_val = old_val * ratio;
+					ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] = new_val;
+					speciation_events.push_back(make_tuple(step, old_val, new_val));
+				}
 
-					// set mask for [i][j] and surrounding cells unless on edge
-					for (int x = -1; x <= 1; x++)
-					{
-						for (int y = -1; y <= 1; y++)
-						{
-							row = i + x;
-							col = j + y;
-							if (row >= local_rows - 1 || row <= 0)
-								continue;
-							if (col >= local_cols - 1 || col <= 0)
-								continue;
-							cell_type local_max = ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS];
-							for (int xx = -1; xx <= 1; xx++)
-							{
-								for (int yy = -1; yy <= 1; yy++)
-								{
-									int neighbor_row = row + xx;
-									int neighbor_col = col + yy;
-									local_max = std::max(local_max, ghost_grid_ptr[(neighbor_row + GHOSTS) * ghost_grid_ld[0] + neighbor_col + GHOSTS]);
-								}
+				// set mask for [i][j] and surrounding cells unless on edge
+				for (int x = -1; x <= 1; x++) {
+					for (int y = -1; y <= 1; y++) {
+						row = i + x;
+						col = j + y;
+						if (row >= local_rows - 1 || row <= 0)
+							continue;
+						if (col >= local_cols - 1 || col <= 0)
+							continue;
+						cell_type local_max = ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS];
+						for (int xx = -1; xx <= 1; xx++) {
+							for (int yy = -1; yy <= 1; yy++) {
+								int neighbor_row = row + xx;
+								int neighbor_col = col + yy;
+								local_max = std::max(local_max, ghost_grid_ptr[(neighbor_row + GHOSTS) * ghost_grid_ld[0] + neighbor_col + GHOSTS]);
 							}
-							if(row >= 0 && col >= 0 && row < local_rows && col < local_cols)
-								land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] * (1 - p));
 						}
+						if(row >= 0 && col >= 0 && row < local_rows && col < local_cols)
+							land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] * (1 - p));
 					}
 				}
 			}
