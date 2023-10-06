@@ -56,7 +56,6 @@ int main(int argc, char *argv[])
 	double p = 0.1;
 	double mutsize = 0.1;
 	double specrate = 0.0001; // 1.0e-4
-	double invrate = 0.2;
 	int timescale = 100 * size / p;
 	int nsteps = 100;
 	int endtime = timescale / nsteps;
@@ -143,7 +142,6 @@ int main(int argc, char *argv[])
 	println("\tindividuals per patch = %f", 1 / p);
 	println("\tmutation size = %f", mutsize);
 	println("\tspeciation rate = %.2e", specrate);
-	println("\tinvasion rate = %f", invrate);
 	println("\ttimescale = %d", timescale);
 	println("\tnsteps = %d", nsteps);
 	println("\tend time = %d", endtime);
