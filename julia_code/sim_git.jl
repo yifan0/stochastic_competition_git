@@ -1,38 +1,19 @@
 # Simulate 2D life history ecosystem with speciation and invasion rules
-using DynamicGrids, Crayons, StatsBase, Plots, DataFrames, GLM, Random, JLD, ArgParse
-
-s = ArgParseSettings()
-@add_arg_table s begin
-    "--size"
-        help="Size of the grid"
-        default=100
-        arg_type=Int
-    "--reps"
-        help = "number of repetitions"
-        arg_type = Int
-        default = 1
-end
-args = parse_args(ARGS, s)
-
+using DynamicGrids, Crayons, StatsBase, Plots, DataFrames, GLM, Random, JLD
 Random.seed!(1234)
-
-# 10 independent simulations of 128X128 system
+# 10 independent simulations of 129X129 system
 # no biological reason for using 10
 # size should be large enough (compared with speciation rate) such that there are enough species generated.
-nrep=args["reps"]
-size = args["size"]
-
+nrep=1
+size = 100
 # Each patch is initialized to have a species with 1.0 effective population (fitness)
 landrept = fill(1.0,size,size,nrep)
-
 # 1/p individuals in each patch
 # p could be other values, e.g., p = 0.5. Changing p affects the mutation & invasion rates
 p = .1
-
 # mutation size is 0.1
 # no biological reason for 0.1. smaller mutation size may give less fluctuating results in variance measurement
-mutsize = 0.2
-
+mutsize = 0.1
 # speciation rate is 1.0e-4
 # We try to push speciation rate to be as small as possible
 specrate = 1.0e-4
@@ -41,45 +22,33 @@ specrate = 1.0e-4
 # According to KPZ results, theoretically the system converges after such time period.
 # According to our simulation, the system has already converged in 1/10 of the timescale below.
 timescale = floor(Int, 100*(1/p)*size^(1))
-
 # divide the total simulation time into 100 steps. We do renormalization after each step so that the effective population values are not too high.
 # no biological reason for 100
 nsteps=100
-
 # simulation time of each step
 endtime = floor(Int,timescale/nsteps)
-
-println("Inputs:")
-println("\trepetitions = ", nrep)
-println("\tsize = ", size, "x", size)
-println("\tindividuals per patch = ", 1/p)
-println("\tmutation size = ", mutsize)
-println("\tspeciation rate = ", specrate)
-println("\ttimescale = ", timescale)
-println("\tnsteps = ", nsteps)
-println("\tend time = ", endtime)
-println("\tthreads = ", Threads.nthreads())
+println(timescale,endtime)
 
 
 # Speciation rule (uses DynamicGrids package)
-# TODO: link prob_mut and mutsize to the variables
-spec_rule = let prob_mut=specrate, mutsize = 0.2
+spec_rule = let prob_mut=specrate, mutsize = 0.1
     Cell() do data, cell, I
-        randvalue = rand() # a mutation occurs with probability prob_mut*probsuccess, so if the randvalue > prob_mut, the mutation cannot occur
+        randvalue = rand()
+        # a mutation occurs with probability prob_mut*probsuccess, so if the randvalue > prob_mut, the mutation cannot occur
         if randvalue < prob_mut
-            upordown=sample([1,-1]) # Effecive population could either increase or decrease in a speciation event
-            ratio = (1+rand()*mutsize)^upordown # The ratio of effective population between new species and old one
-            # Probability that the new species outcompetes the old one:
-            # new_eff_pop * p / (new_eff_pop * p + old_eff_pop * (1-p)). After simplification we get:
-            pr = p*ratio # very minor optimization
-            probsuccess = pr/(pr-ratio+1)
-            #probsuccess = p*ratio/(p*(ratio-1)+1)
-            # If the new species wins, replace the cell with the new effective population, otherwise keep the original value
-            randvalue <= prob_mut*probsuccess ? cell*ratio : cell
+        # Effecive population could either increase or decrease in a speciation event
+        upordown=sample([1,-1])
+        # The ratio of effective populatoin between new species and old one
+        ratio = (1+rand()*mutsize)^upordown
+        # Probability that the new species outcompetes the old one:
+        # new_eff_pop * p / (new_eff_pop * p + old_eff_pop * (1-p)). After simplification we get:
+        probsuccess = p*ratio/(p*(ratio-1)+1)
+        # If the new species wins, replace the cell with the new effective population, otherwise keep the original value
+        randvalue <= prob_mut*probsuccess ? cell*ratio : cell
         else
             cell
         end
-    end
+end
 end
 
 # Invasion rule (uses DynamicGrids package)
@@ -121,12 +90,11 @@ function simulation(nrep,step)
         sim!(output, spec_rule,nbr_rule; proc = ThreadedCPU(), boundary=Wrap())
         init=output[1]
         # renormalize the simulated result so that the fittest species will not have a very high effective population so that it always outcompetes other species.
-        println("Grid average before normalizing = ", mean(init))
         init=init/mean(init)
         # replace the nth copy with the simulated result
         landrept[:,:,n] = init
     end
-    println("Step = ", step)
+    println(step)
 end
 
 # Wrap into a single function for performance
@@ -139,19 +107,10 @@ end
 
 
 @time begin
-    for n in 1:nrep
-        init = landrept[:,:,n]
-        output = ResultOutput(init, tspan=1:endtime)
-        sim!(output, spec_rule,nbr_rule)
-        init = output[1]
-        println("Grid average before normalizing = ", mean(init))
-        init=init/mean(init)
-        landrept[:,:,n] = init
-    end
+    func(nsteps, nrep)
 end
 
-# Save the 10 independent copies of size*size system
-println("Grid average = ", mean(landrept))
-#println(landrept)
+# Save the 10 independent copies of 129*129 system
 save("LH2D129-4.jld", "data",landrept)
+
 
