@@ -4,8 +4,8 @@ Random.seed!(1234)
 # 10 independent simulations of 129X129 system
 # no biological reason for using 10
 # size should be large enough (compared with speciation rate) such that there are enough species generated.
-nrep=1
-size = 100
+nrep=10
+size = 129
 # Each patch is initialized to have a species with 1.0 effective population (fitness)
 landrept = fill(1.0,size,size,nrep)
 # 1/p individuals in each patch
@@ -112,5 +112,6 @@ end
 
 # Save the 10 independent copies of 129*129 system
 save("LH2D129-4.jld", "data",landrept)
+
 
 
