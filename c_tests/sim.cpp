@@ -1,5 +1,12 @@
+//#define USE_AGNER_RNG
+#define USE_BINOM_DIST
+#define USE_BOOL_MASK
+#define USE_MASK
+#if defined(USE_BOOL_MASK) && defined(USE_MASK)
+#undef USE_BOOL_MASK
+#warning "USE_MASK and USE_BOOL_MASK are mutually exclusive, so turning off USE_BOOL_MASK"
+#endif /* defined(USE_BOOL_MASK) && defined(USE_MASK) */
 #include <cstdio>
-#include <random>	// rand()
 #include <string.h> // memcpy()
 #include <queue>	// queue
 #include <omp.h>
@@ -10,12 +17,16 @@
 #include <stack>
 #include <numeric>
 #include <algorithm>
+#ifdef USE_AGNER_RNG
 #include "sfmt.h"
 #include "sfmt.cpp"
 #include "userintf.cpp"
 #include "macdecls.h"
 #include "stocc.h"
 #include "stoc1.cpp"
+#else
+#include <random>	// rand()
+#endif /* USE_AGNER_RNG */
 #include <mpi.h>
 #include <iostream>	   // std::cout
 #include <fstream>	   // std::ofstream
@@ -24,6 +35,12 @@
 #include "tree.h"
 #include <mxx/reduction.hpp>
 using namespace std;
+
+#ifdef USE_AGNER_RNG
+#define RANDOM_FLOAT RanGen.Random()
+#else
+#define RANDOM_FLOAT real_dist(gen)
+#endif /* USE_AGNER_RNG */
 
 #define println(...) { if(me == 0) { printf(__VA_ARGS__); printf("\n"); } }
 #define debug(...) { if(true) { printf("Rank %d: ", me); printf(__VA_ARGS__); printf("\n"); fflush(stdout); } }
@@ -34,10 +51,11 @@ using namespace std;
 
 typedef std::tuple<int, int, cell_type> cell_update;
 
+#if defined(USE_BINOM_DIST) && defined(USE_AGNER_RNG)
 // Select locations of events based on probability p events in area 0 to n
 // return: vector of event locations
-set<int> event_list(CRandomSFMT1& rng, StochasticLib1& srng, size_t n, double p) {
-	size_t count = srng.Binomial(n, p);
+set<int> event_list(CRandomSFMT1& rng, StochasticLib1& stoc_rng, size_t n, double p) {
+	size_t count = stoc_rng.Binomial(n, p);
 	set<int> events;
 	while (events.size() < count) {
 		int index = rng.IRandomX(0,n-1);
@@ -47,6 +65,19 @@ set<int> event_list(CRandomSFMT1& rng, StochasticLib1& srng, size_t n, double p)
 	}
 	return events;
 }
+#elif defined(USE_BINOM_DIST)
+set<int> event_list(std::binomial_distribution<int> srng, std::mt19937 gen, size_t n, double p) {
+	size_t count = srng(gen);
+	set<int> events;
+	while(events.size() < count) {
+		int index = gen() % n;
+		if(!events.count(index)) {
+			events.insert(index);
+		}
+	}
+	return events;
+}
+#endif /* defined(USE_BINOM_DIST) && defined(USE_AGNER_RNG) */
 
 
 int main(int argc, char *argv[]) {
@@ -141,19 +172,56 @@ int main(int argc, char *argv[]) {
 	println("\tnsteps = %d", nsteps);
 	println("\tend time = %d", endtime);
 	println("\tprocesses = %d", num_procs);
+	println("Optimizations:");
+#ifdef USE_AGNER_RNG
+	println("\tAgner RNG: True");
+#else
+	println("\tAgner RNG: False");
+#endif
+#ifdef USE_MASK
+	println("\tUsing mask: True");
+#elif defined(USE_BOOL_MASK)
+	println("\tUsing boolean mask: True");
+#else
+	println("\tUsing mask: False");
+#endif
+#ifdef USE_BINOM_DIST
+	println("\tUsing binomial distribution: True");
+#else
+	println("\tUsing binomial distribution: False");
+#endif
 	println("");
 	fflush(stdout);
 
-	// Random number generation
-	CRandomSFMT1 RanGen(time(0) + me * 10); // Agner Combined generator
-	StochasticLib1 sto(time(0) + me * 7);	// Stochastic RNG
 	int local_rows = (hi[0] - lo[0] + 1);
 	int local_cols = (hi[1] - lo[1] + 1);
 	int local_area = local_cols * local_rows;
+	// Random number generation
+#ifdef USE_AGNER_RNG
+	CRandomSFMT1 RanGen(time(0) + me * 10); // Agner Combined generator
+#ifdef USE_BINOM_DIST
+	StochasticLib1 sto(time(0) + me * 7);	// Stochastic RNG
+#endif /* USE_BINOM_DIST */
+#else
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_real_distribution<> real_dist(0.0, 1.0);
+#ifdef USE_BINOM_DIST
+	std::binomial_distribution<> binom_dist(local_area, specrate);
+#endif /* USE_BINOM_DIST */
+#endif /* USE_AGNER_RNG */
+#ifdef USE_MASK
 	double land_mask_data[local_area];
 	double* land_mask[local_rows];
+#endif /* USE_MASK */
+#ifdef USE_BOOL_MASK
+	bool land_mask_data[local_area];
+	bool* land_mask[local_rows];
+#endif /* USE_MASK */
+#if defined(USE_BOOL_MASK) || defined(USE_MASK)
 	for (size_t i = 0; i < local_rows; i++)
 		land_mask[i] = land_mask_data + i * local_cols;
+#endif /* defined(USE_BOOL_MASK) || defined(USE_MASK) */
 
 	for (int rep = 0; rep < nrep; rep++) {
 		rep_start_time = std::chrono::system_clock::now();
@@ -167,6 +235,7 @@ int main(int argc, char *argv[]) {
 			GA_Error(grid_err, 1);
 		}
 
+#if defined(USE_BOOL_MASK) || defined(USE_MASK)
 		// zero out mask except local edges
 		memset(land_mask_data, 0, sizeof(*land_mask_data));
 		for (size_t i = 0; i < local_rows; i++) {
@@ -177,6 +246,7 @@ int main(int argc, char *argv[]) {
 			land_mask[0][i] = 1;
 			land_mask[local_rows - 1][i] = 1;
 		}
+#endif /* defined(USE_BOOL_MASK) || defined(USE_MASK) */
 
 		// invasion rule variables
 		cell_type neighborhood[8];
@@ -191,20 +261,30 @@ int main(int argc, char *argv[]) {
 		for (int step = 0; step < timescale; step++) {
 
 			// speciation rule
+#ifdef USE_BINOM_DIST
+#ifdef USE_AGNER_RNG
 			set<int> spec_events = event_list(RanGen, sto, local_area, specrate);
+#else
+			set<int> spec_events = event_list(binom_dist, gen, local_area, specrate);
+#endif /* USE_AGNER_RNG */
 			for(int index : spec_events) {
 				size_t i = index / local_cols; // row
 				size_t j = index % local_cols; // col
-				float ratio = (1 + RanGen.Random() * mutsize);
-				if (RanGen.Random() < 0.5) ratio = 1 / ratio;
+#else
+			for(size_t i = 0; i < local_rows; i++) {
+				for(size_t j = 0; j < local_cols; j++) {
+					if( RANDOM_FLOAT > specrate ) continue;
+#endif /* USE_BINOM_DIST */
+				float ratio = (1 + RANDOM_FLOAT * mutsize);
+				if (RANDOM_FLOAT < 0.5) ratio = 1 / ratio;
 				float probsuccess = p * ratio / (p * (ratio - 1) + 1);
-				if (RanGen.Random() <= probsuccess) {
+				if (RANDOM_FLOAT <= probsuccess) {
 					cell_type old_val = ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS];
 					cell_type new_val = old_val * ratio;
 					ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] = new_val;
 					speciation_events.push_back(make_tuple(step, old_val, new_val));
 				}
-
+#if defined(USE_BOOL_MASK) || defined(USE_MASK)
 				// set mask for [i][j] and surrounding cells unless on edge
 				for (int x = -1; x <= 1; x++) {
 					for (int y = -1; y <= 1; y++) {
@@ -214,6 +294,7 @@ int main(int argc, char *argv[]) {
 							continue;
 						if (col >= local_cols - 1 || col <= 0)
 							continue;
+#ifdef USE_MASK
 						cell_type local_max = ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS];
 						for (int xx = -1; xx <= 1; xx++) {
 							for (int yy = -1; yy <= 1; yy++) {
@@ -224,9 +305,18 @@ int main(int argc, char *argv[]) {
 						}
 						if(row >= 0 && col >= 0 && row < local_rows && col < local_cols)
 							land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] * (1 - p));
+#else
+						land_mask[row][col] = 1;
+#endif /* USE_MASK */
 					}
 				}
+#endif /* defined(USE_BOOL_MASK) || defined(USE_MASK) */
+#ifdef USE_BINOM_DIST
 			}
+#else
+				}
+			}
+#endif /* USE_BINOM_DIST */
 
 			if (step % 10 == 0)
 				GA_Update_ghosts(ga_land_grid);
@@ -235,9 +325,13 @@ int main(int argc, char *argv[]) {
 			std::vector<cell_update> updates;
 			for (size_t i = 0; i < local_rows; i++) {
 				for (size_t j = 0; j < local_cols; j++) {
+#if defined(USE_BOOL_MASK) || defined(USE_MASK)
 					if (land_mask[i][j] != 0) {
-						double randval = RanGen.Random(); //random_float();
+#endif /* defined(USE_BOOL_MASK) || defined(USE_MASK) */
+						double randval = RANDOM_FLOAT;
+#ifdef USE_MASK
 						if (randval < land_mask[i][j]) {
+#endif /* USE_MASK */
 							inv_sum = 0;
 							inv_index = 0;
 							for (int x = -1; x <= 1; x++) {
@@ -252,7 +346,7 @@ int main(int argc, char *argv[]) {
 							}
 							if (randval <= inv_sum / 8) {
 								// Get random element with weighted probabilities
-								double weighted_rand = RanGen.Random() * inv_sum;
+								double weighted_rand = RANDOM_FLOAT * inv_sum;
 								inv_index = 0;
 								while (weighted_rand > inv[inv_index]) {
 									weighted_rand -= inv[inv_index];
@@ -262,13 +356,18 @@ int main(int argc, char *argv[]) {
 									updates.push_back({i, j, neighborhood[inv_index]});
 								}
 							}
+#ifdef USE_MASK
 						}
+#endif /* USE_MASK */
+#if defined(USE_BOOL_MASK) || defined(USE_MASK)
 					}
+#endif /* defined(USE_BOOL_MASK) || defined(USE_MASK) */
 				}
 			}
 			
 			for (const auto &[i, j, val] : updates) {
 				ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] = val;
+#if defined(USE_BOOL_MASK) || defined(USE_MASK)
 				for (int x = -1; x <= 1; x++) {
 					for (int y = -1; y <= 1; y++) {
 						row = i + x;
@@ -299,10 +398,15 @@ int main(int argc, char *argv[]) {
 						}
 						else {
 							if(row >= 0 && col >= 0 && row < local_rows && col < local_cols)
+#ifdef USE_MASK
 								land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] * (1 - p));
+#else
+								land_mask[row][col] = 1; 
+#endif /* USE_MASK */
 						}
 					}
 				}
+#endif /* defined(USE_BOOL_MASK) || defined(USE_MASK) */
 			}
 
 			// renormalize every nstep steps
