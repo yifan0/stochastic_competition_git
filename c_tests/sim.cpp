@@ -1,7 +1,8 @@
-//#define USE_AGNER_RNG
+#define USE_AGNER_RNG
 #define USE_BINOM_DIST
-#define USE_BOOL_MASK
+//#define USE_BOOL_MASK
 #define USE_MASK
+#define TREE
 #if defined(USE_BOOL_MASK) && defined(USE_MASK)
 #undef USE_BOOL_MASK
 #warning "USE_MASK and USE_BOOL_MASK are mutually exclusive, so turning off USE_BOOL_MASK"
@@ -32,7 +33,11 @@
 #include <fstream>	   // std::ofstream
 #include <cxxopts.hpp> // to handle cmdline args
 #include "ga++.h"
+#ifdef TREE
 #include "tree.h"
+#else
+typedef double cell_type;
+#endif /* TREE */
 #include <mxx/reduction.hpp>
 using namespace std;
 
@@ -190,6 +195,11 @@ int main(int argc, char *argv[]) {
 #else
 	println("\tUsing binomial distribution: False");
 #endif
+#ifdef TREE
+	println("Generating tree");
+#else
+	println("No tree");
+#endif
 	println("");
 	fflush(stdout);
 
@@ -254,8 +264,10 @@ int main(int argc, char *argv[]) {
 		cell_type inv_sum = 0;
 		int inv_index = 0;
 
+#ifdef TREE
 		// track speciation events
 		vector<tuple<size_t, cell_type, cell_type>> speciation_events;
+#endif /* TREE */
 
 		int row, col;
 		for (int step = 0; step < timescale; step++) {
@@ -282,7 +294,9 @@ int main(int argc, char *argv[]) {
 					cell_type old_val = ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS];
 					cell_type new_val = old_val * ratio;
 					ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] = new_val;
+#ifdef TREE
 					speciation_events.push_back(make_tuple(step, old_val, new_val));
+#endif /* TREE */
 				}
 #if defined(USE_BOOL_MASK) || defined(USE_MASK)
 				// set mask for [i][j] and surrounding cells unless on edge
@@ -417,15 +431,16 @@ int main(int argc, char *argv[]) {
 						land_grid_mean += ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS];
 				land_grid_mean = land_grid_mean / (size * size);
 				MPI_Allreduce(MPI_IN_PLACE, &land_grid_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-				println("Global average at step %d = %f", step, land_grid_mean);
 				if (land_grid_mean > 100) {
 					if (me == 0)
 						println("Normalizing by %f", land_grid_mean);
 
+#ifdef TREE
 					for (tuple<size_t, cell_type, cell_type> &event : speciation_events) {
 						get<1>(event) = get<1>(event) / land_grid_mean;
 						get<2>(event) = get<2>(event) / land_grid_mean;
 					}
+#endif /* TREE */
 
 					for (size_t i = 0; i < ghost_dims[0]; i++)
 						for (size_t j = 0; j < ghost_dims[1]; j++)
@@ -445,6 +460,7 @@ int main(int argc, char *argv[]) {
 		GA_Print_csv_file(fp, ga_land_grid);
 		fclose(fp);
 
+#ifdef TREE
 		// gather speciation events
 		vector<tuple<size_t, cell_type, cell_type>> global_speciation_events = mxx::gatherv(speciation_events, 0);
 		// gather extant species set
@@ -495,6 +511,7 @@ int main(int argc, char *argv[]) {
 			delete_tree(tree);
 			fout.close();
 		}
+#endif /* TREE */
 
 		out_end_time = std::chrono::system_clock::now();
 		std::chrono::duration<double> out_time = out_end_time - out_start_time;
