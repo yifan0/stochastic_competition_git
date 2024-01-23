@@ -1,4 +1,3 @@
-#define USE_AGNER_RNG
 //#define USE_BINOM_DIST
 //#define USE_BOOL_MASK
 //#define USE_MASK
@@ -18,16 +17,12 @@
 #include <stack>
 #include <numeric>
 #include <algorithm>
-#ifdef USE_AGNER_RNG
 #include "sfmt.h"
 #include "sfmt.cpp"
 #include "userintf.cpp"
 #include "macdecls.h"
 #include "stocc.h"
 #include "stoc1.cpp"
-#else
-#include <random>	// rand()
-#endif /* USE_AGNER_RNG */
 #include <mpi.h>
 #include <iostream>	   // std::cout
 #include <fstream>	   // std::ofstream
@@ -41,11 +36,7 @@ typedef double cell_type;
 #include <mxx/reduction.hpp>
 using namespace std;
 
-#ifdef USE_AGNER_RNG
 #define RANDOM_FLOAT RanGen.Random()
-#else
-#define RANDOM_FLOAT real_dist(gen)
-#endif /* USE_AGNER_RNG */
 
 #define println(...) { if(me == 0) { printf(__VA_ARGS__); printf("\n"); } }
 #define debug(...) { if(true) { printf("Rank %d: ", me); printf(__VA_ARGS__); printf("\n"); fflush(stdout); } }
@@ -56,7 +47,7 @@ using namespace std;
 
 typedef std::tuple<int, int, cell_type> cell_update;
 
-#if defined(USE_BINOM_DIST) && defined(USE_AGNER_RNG)
+#if defined(USE_BINOM_DIST)
 // Select locations of events based on probability p events in area 0 to n
 // return: vector of event locations
 set<int> event_list(CRandomSFMT1& rng, StochasticLib1& stoc_rng, size_t n, double p) {
@@ -70,19 +61,7 @@ set<int> event_list(CRandomSFMT1& rng, StochasticLib1& stoc_rng, size_t n, doubl
 	}
 	return events;
 }
-#elif defined(USE_BINOM_DIST)
-set<int> event_list(std::binomial_distribution<int> srng, std::mt19937 gen, size_t n, double p) {
-	size_t count = srng(gen);
-	set<int> events;
-	while(events.size() < count) {
-		int index = gen() % n;
-		if(!events.count(index)) {
-			events.insert(index);
-		}
-	}
-	return events;
-}
-#endif /* defined(USE_BINOM_DIST) && defined(USE_AGNER_RNG) */
+#endif /* defined(USE_BINOM_DIST) */
 
 
 int main(int argc, char *argv[]) {
@@ -178,11 +157,6 @@ int main(int argc, char *argv[]) {
 	println("\tend time = %d", endtime);
 	println("\tprocesses = %d", num_procs);
 	println("Optimizations:");
-#ifdef USE_AGNER_RNG
-	println("\tAgner RNG: True");
-#else
-	println("\tAgner RNG: False");
-#endif
 #ifdef USE_MASK
 	println("\tUsing mask: True");
 #elif defined(USE_BOOL_MASK)
@@ -218,19 +192,10 @@ int main(int argc, char *argv[]) {
 		println("Thread %d of %d", omp_get_thread_num(), omp_get_num_threads());
 	}
 
-#ifdef USE_AGNER_RNG
 	CRandomSFMT1 RanGen(time(0) + num_procs * 10 + omp_get_thread_num()); // Agner Combined generator
 #ifdef USE_BINOM_DIST
 	StochasticLib1 sto(time(0) + me * 7);	// Stochastic RNG
 #endif /* USE_BINOM_DIST */
-#else
-	std::random_device rd;
-	std::mt19937 gen(rd());
-	std::uniform_real_distribution<> real_dist(0.0, 1.0);
-#ifdef USE_BINOM_DIST
-	std::binomial_distribution<> binom_dist(local_area, specrate);
-#endif /* USE_BINOM_DIST */
-#endif /* USE_AGNER_RNG */
 #ifdef USE_MASK
 	double land_mask_data[local_area];
 	double* land_mask[local_rows];
@@ -288,11 +253,7 @@ int main(int argc, char *argv[]) {
 
 			// speciation rule
 #ifdef USE_BINOM_DIST
-#ifdef USE_AGNER_RNG
 			set<int> spec_events = event_list(RanGen, sto, local_area, specrate);
-#else
-			set<int> spec_events = event_list(binom_dist, gen, local_area, specrate);
-#endif /* USE_AGNER_RNG */
 			for(int index : spec_events) {
 				size_t i = index / local_cols; // row
 				size_t j = index % local_cols; // col
