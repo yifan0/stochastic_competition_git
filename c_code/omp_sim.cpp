@@ -1,4 +1,3 @@
-//#define USE_BINOM_DIST
 //#define USE_BOOL_MASK
 //#define USE_MASK
 //#define TREE
@@ -47,7 +46,6 @@ using namespace std;
 
 typedef std::tuple<int, int, cell_type> cell_update;
 
-#if defined(USE_BINOM_DIST)
 // Select locations of events based on probability p events in area 0 to n
 // return: vector of event locations
 set<int> event_list(CRandomSFMT1& rng, StochasticLib1& stoc_rng, size_t n, double p) {
@@ -61,8 +59,6 @@ set<int> event_list(CRandomSFMT1& rng, StochasticLib1& stoc_rng, size_t n, doubl
 	}
 	return events;
 }
-#endif /* defined(USE_BINOM_DIST) */
-
 
 int main(int argc, char *argv[]) {
 	int nrep = 10;
@@ -164,11 +160,6 @@ int main(int argc, char *argv[]) {
 #else
 	println("\tUsing mask: False");
 #endif
-#ifdef USE_BINOM_DIST
-	println("\tUsing binomial distribution: True");
-#else
-	println("\tUsing binomial distribution: False");
-#endif
 #ifdef TREE
 	println("Generating tree");
 #else
@@ -193,9 +184,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	CRandomSFMT1 RanGen(time(0) + num_procs * 10 + omp_get_thread_num()); // Agner Combined generator
-#ifdef USE_BINOM_DIST
 	StochasticLib1 sto(time(0) + me * 7);	// Stochastic RNG
-#endif /* USE_BINOM_DIST */
 #ifdef USE_MASK
 	double land_mask_data[local_area];
 	double* land_mask[local_rows];
@@ -250,63 +239,52 @@ int main(int argc, char *argv[]) {
 
 		int row, col;
 		for (int step = 0; step < timescale; step++) {
-
+			// TODO: find way to parallelize speciation rule
 			// speciation rule
-#ifdef USE_BINOM_DIST
-			set<int> spec_events = event_list(RanGen, sto, local_area, specrate);
-			for(int index : spec_events) {
-				size_t i = index / local_cols; // row
-				size_t j = index % local_cols; // col
-#else
-			#pragma omp for
-			for(size_t i = 0; i < local_rows; i++) {
-				for(size_t j = 0; j < local_cols; j++) {
-					if( RANDOM_FLOAT > specrate ) continue;
-#endif /* USE_BINOM_DIST */
-				float ratio = (1 + RANDOM_FLOAT * mutsize);
-				if (RANDOM_FLOAT < 0.5) ratio = 1 / ratio;
-				float probsuccess = p * ratio / (p * (ratio - 1) + 1);
-				if (RANDOM_FLOAT <= probsuccess) {
-					cell_type old_val = ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS];
-					cell_type new_val = old_val * ratio;
-					ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] = new_val;
+			for(size_t i = 0; i < local_rows; i++) { // i as row
+				set<int> spec_events = event_list(RanGen, sto, local_cols, specrate);
+				for(int index : spec_events) {
+					size_t j = index; // col
+					float ratio = (1 + RANDOM_FLOAT * mutsize);
+					if (RANDOM_FLOAT < 0.5) ratio = 1 / ratio;
+					float probsuccess = p * ratio / (p * (ratio - 1) + 1);
+					if (RANDOM_FLOAT <= probsuccess) {
+						cell_type old_val = ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS];
+						cell_type new_val = old_val * ratio;
+						ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] = new_val;
 #ifdef TREE
-					speciation_events.push_back(make_tuple(step, old_val, new_val));
+						speciation_events.push_back(make_tuple(step, old_val, new_val));
 #endif /* TREE */
-				}
-#if defined(USE_BOOL_MASK) || defined(USE_MASK)
-				// set mask for [i][j] and surrounding cells unless on edge
-				for (int x = -1; x <= 1; x++) {
-					for (int y = -1; y <= 1; y++) {
-						row = i + x;
-						col = j + y;
-						if (row >= local_rows - 1 || row <= 0)
-							continue;
-						if (col >= local_cols - 1 || col <= 0)
-							continue;
-#ifdef USE_MASK
-						cell_type local_max = ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS];
-						for (int xx = -1; xx <= 1; xx++) {
-							for (int yy = -1; yy <= 1; yy++) {
-								int neighbor_row = row + xx;
-								int neighbor_col = col + yy;
-								local_max = std::max(local_max, ghost_grid_ptr[(neighbor_row + GHOSTS) * ghost_grid_ld[0] + neighbor_col + GHOSTS]);
-							}
-						}
-						if(row >= 0 && col >= 0 && row < local_rows && col < local_cols)
-							land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] * (1 - p));
-#else
-						land_mask[row][col] = 1;
-#endif /* USE_MASK */
 					}
-				}
-#endif /* defined(USE_BOOL_MASK) || defined(USE_MASK) */
-#ifdef USE_BINOM_DIST
-			}
+#if defined(USE_BOOL_MASK) || defined(USE_MASK)
+					// set mask for [i][j] and surrounding cells unless on edge
+					for (int x = -1; x <= 1; x++) {
+						for (int y = -1; y <= 1; y++) {
+							row = i + x;
+							col = j + y;
+							if (row >= local_rows - 1 || row <= 0)
+								continue;
+							if (col >= local_cols - 1 || col <= 0)
+								continue;
+#ifdef USE_MASK
+							cell_type local_max = ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS];
+							for (int xx = -1; xx <= 1; xx++) {
+								for (int yy = -1; yy <= 1; yy++) {
+									int neighbor_row = row + xx;
+									int neighbor_col = col + yy;
+									local_max = std::max(local_max, ghost_grid_ptr[(neighbor_row + GHOSTS) * ghost_grid_ld[0] + neighbor_col + GHOSTS]);
+								}
+							}
+							if(row >= 0 && col >= 0 && row < local_rows && col < local_cols)
+								land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] * (1 - p));
 #else
+							land_mask[row][col] = 1;
+#endif /* USE_MASK */
+						}
+					}
+#endif /* defined(USE_BOOL_MASK) || defined(USE_MASK) */
 				}
 			}
-#endif /* USE_BINOM_DIST */
 
 			if (step % 10 == 0) {
 				#pragma omp single
@@ -404,7 +382,6 @@ int main(int argc, char *argv[]) {
 			}
 
 			// renormalize every nstep steps
-			// TODO: need to get sum from all procs
 			if (step % endtime == endtime - 1) {
 				land_grid_mean = 0;
 				#pragma omp for reduction(+:land_grid_mean)
