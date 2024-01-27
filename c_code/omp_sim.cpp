@@ -1,10 +1,3 @@
-//#define USE_BOOL_MASK
-//#define USE_MASK
-//#define TREE
-#if defined(USE_BOOL_MASK) && defined(USE_MASK)
-#undef USE_BOOL_MASK
-#warning "USE_MASK and USE_BOOL_MASK are mutually exclusive, so turning off USE_BOOL_MASK"
-#endif /* defined(USE_BOOL_MASK) && defined(USE_MASK) */
 #include <cstdio>
 #include <string.h> // memcpy()
 #include <queue>	// queue
@@ -27,19 +20,15 @@
 #include <fstream>	   // std::ofstream
 #include <cxxopts.hpp> // to handle cmdline args
 #include "ga++.h"
-#ifdef TREE
 #include "tree.h"
-#else
-typedef double cell_type;
-#endif /* TREE */
 #include <mxx/reduction.hpp>
 using namespace std;
 
 #define RANDOM_FLOAT RanGen.Random()
 
-#define println(...) { if(me == 0) { printf(__VA_ARGS__); printf("\n"); } }
-#define debug(...) { if(true) { printf("Rank %d: ", me); printf(__VA_ARGS__); printf("\n"); fflush(stdout); } }
-#define print(...) { printf(__VA_ARGS__); }
+// #define println(...) { if(me == 0) { printf(__VA_ARGS__); printf("\n"); } }
+// #define debug(...) { if(true) { printf("Rank %d: ", me); printf(__VA_ARGS__); printf("\n"); fflush(stdout); } }
+// #define print(...) { printf(__VA_ARGS__); }
 
 #define NDIM 2
 #define GHOSTS 2
@@ -138,7 +127,6 @@ int main(int argc, char *argv[]) {
 	NGA_Distribution(ga_land_grid, me, lo, hi);
 	if (lo[0] < 0) {
 		debug("Owns no elements");
-		return 1;
 	}
 	NGA_Access(ga_land_grid, lo, hi, &land_grid_ptr, grid_ld);
 
@@ -152,20 +140,6 @@ int main(int argc, char *argv[]) {
 	println("\tnsteps = %d", nsteps);
 	println("\tend time = %d", endtime);
 	println("\tprocesses = %d", num_procs);
-	println("Optimizations:");
-#ifdef USE_MASK
-	println("\tUsing mask: True");
-#elif defined(USE_BOOL_MASK)
-	println("\tUsing boolean mask: True");
-#else
-	println("\tUsing mask: False");
-#endif
-#ifdef TREE
-	println("Generating tree");
-#else
-	println("No tree");
-#endif
-	println("");
 	fflush(stdout);
 
 	cell_type land_grid_mean;
@@ -173,30 +147,22 @@ int main(int argc, char *argv[]) {
 	int local_rows = (hi[0] - lo[0] + 1);
 	int local_cols = (hi[1] - lo[1] + 1);
 	int local_area = local_cols * local_rows;
-	// Random number generation
+	double land_mask_data[local_area];
+	double* land_mask[local_rows];
+	vector<tuple<size_t, cell_type, cell_type>> process_speciation_events;
+	vector<tuple<size_t, cell_type, cell_type>> global_speciation_events;
+
 #pragma omp parallel
 {
-
-	#pragma omp for ordered
-	for(int thread = 0; thread < omp_get_num_threads(); thread++) {
-#pragma omp ordered
-		println("Thread %d of %d", omp_get_thread_num(), omp_get_num_threads());
-	}
+	#pragma omp single
+	println("threads  = %d", omp_get_num_threads());
 
 	CRandomSFMT1 RanGen(time(0) + num_procs * 10 + omp_get_thread_num()); // Agner Combined generator
 	StochasticLib1 sto(time(0) + me * 7);	// Stochastic RNG
-#ifdef USE_MASK
-	double land_mask_data[local_area];
-	double* land_mask[local_rows];
-#endif /* USE_MASK */
-#ifdef USE_BOOL_MASK
-	bool land_mask_data[local_area];
-	bool* land_mask[local_rows];
-#endif /* USE_MASK */
-#if defined(USE_BOOL_MASK) || defined(USE_MASK)
+
+	#pragma omp for
 	for (size_t i = 0; i < local_rows; i++)
 		land_mask[i] = land_mask_data + i * local_cols;
-#endif /* defined(USE_BOOL_MASK) || defined(USE_MASK) */
 
 	for (int rep = 0; rep < nrep; rep++) {
 		rep_start_time = std::chrono::system_clock::now();
@@ -213,18 +179,20 @@ int main(int argc, char *argv[]) {
 			GA_Error(grid_err, 1);
 		}
 
-#if defined(USE_BOOL_MASK) || defined(USE_MASK)
 		// zero out mask except local edges
+		#pragma omp single
 		memset(land_mask_data, 0, sizeof(*land_mask_data));
+		#pragma omp for
 		for (size_t i = 0; i < local_rows; i++) {
 			land_mask[i][0] = 1;
 			land_mask[i][local_cols - 1] = 1;
 		}
+		#pragma omp for
 		for (size_t i = 0; i < local_cols; i++) {
 			land_mask[0][i] = 1;
 			land_mask[local_rows - 1][i] = 1;
 		}
-#endif /* defined(USE_BOOL_MASK) || defined(USE_MASK) */
+		#pragma omp barrier
 
 		// invasion rule variables
 		cell_type neighborhood[8];
@@ -232,15 +200,17 @@ int main(int argc, char *argv[]) {
 		cell_type inv_sum = 0;
 		int inv_index = 0;
 
-#ifdef TREE
-		// track speciation events
+		// track speciation events, speciation_events is local to each thread
 		vector<tuple<size_t, cell_type, cell_type>> speciation_events;
-#endif /* TREE */
+		#pragma omp single
+		process_speciation_events.clear();
+		global_speciation_events.clear();
 
 		int row, col;
 		for (int step = 0; step < timescale; step++) {
-			// TODO: find way to parallelize speciation rule
+
 			// speciation rule
+			#pragma omp for
 			for(size_t i = 0; i < local_rows; i++) { // i as row
 				set<int> spec_events = event_list(RanGen, sto, local_cols, specrate);
 				for(int index : spec_events) {
@@ -252,11 +222,9 @@ int main(int argc, char *argv[]) {
 						cell_type old_val = ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS];
 						cell_type new_val = old_val * ratio;
 						ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] = new_val;
-#ifdef TREE
 						speciation_events.push_back(make_tuple(step, old_val, new_val));
-#endif /* TREE */
 					}
-#if defined(USE_BOOL_MASK) || defined(USE_MASK)
+
 					// set mask for [i][j] and surrounding cells unless on edge
 					for (int x = -1; x <= 1; x++) {
 						for (int y = -1; y <= 1; y++) {
@@ -266,7 +234,6 @@ int main(int argc, char *argv[]) {
 								continue;
 							if (col >= local_cols - 1 || col <= 0)
 								continue;
-#ifdef USE_MASK
 							cell_type local_max = ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS];
 							for (int xx = -1; xx <= 1; xx++) {
 								for (int yy = -1; yy <= 1; yy++) {
@@ -275,19 +242,17 @@ int main(int argc, char *argv[]) {
 									local_max = std::max(local_max, ghost_grid_ptr[(neighbor_row + GHOSTS) * ghost_grid_ld[0] + neighbor_col + GHOSTS]);
 								}
 							}
-							if(row >= 0 && col >= 0 && row < local_rows && col < local_cols)
-								land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] * (1 - p));
-#else
-							land_mask[row][col] = 1;
-#endif /* USE_MASK */
+							if(row >= 0 && col >= 0 && row < local_rows && col < local_cols) {
+								#pragma omp atomic write
+								land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] * (1 - p));;
+							}
 						}
 					}
-#endif /* defined(USE_BOOL_MASK) || defined(USE_MASK) */
 				}
 			}
 
+			#pragma omp single
 			if (step % 10 == 0) {
-				#pragma omp single
 				GA_Update_ghosts(ga_land_grid);
 			}
 
@@ -296,13 +261,9 @@ int main(int argc, char *argv[]) {
 			#pragma omp for
 			for (size_t i = 0; i < local_rows; i++) {
 				for (size_t j = 0; j < local_cols; j++) {
-#if defined(USE_BOOL_MASK) || defined(USE_MASK)
 					if (land_mask[i][j] != 0) {
-#endif /* defined(USE_BOOL_MASK) || defined(USE_MASK) */
 						double randval = RANDOM_FLOAT;
-#ifdef USE_MASK
 						if (randval < land_mask[i][j]) {
-#endif /* USE_MASK */
 							inv_sum = 0;
 							inv_index = 0;
 							for (int x = -1; x <= 1; x++) {
@@ -327,19 +288,15 @@ int main(int argc, char *argv[]) {
 									updates.push_back({i, j, neighborhood[inv_index]});
 								}
 							}
-#ifdef USE_MASK
 						}
-#endif /* USE_MASK */
-#if defined(USE_BOOL_MASK) || defined(USE_MASK)
 					}
-#endif /* defined(USE_BOOL_MASK) || defined(USE_MASK) */
 				}
 			}
 		
-			#pragma omp for	
+			// every thread has a private updates
+			cell_type local_max;
 			for (const auto &[i, j, val] : updates) {
 				ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] = val;
-#if defined(USE_BOOL_MASK) || defined(USE_MASK)
 				for (int x = -1; x <= 1; x++) {
 					for (int y = -1; y <= 1; y++) {
 						row = i + x;
@@ -348,7 +305,7 @@ int main(int argc, char *argv[]) {
 							continue;
 						if (col >= local_cols - 1 || col <= 0)
 							continue;
-						cell_type local_max = 0;
+						local_max = 0;
 						for (int xx = -1; xx <= 1; xx++) {
 							for (int yy = -1; yy <= 1; yy++) {
 								row = i + x + xx;
@@ -365,20 +322,19 @@ int main(int argc, char *argv[]) {
 						row = i + x;
 						col = j + y;
 						if (local_max == 0) {
-							if(row >= 0 && col >= 0 && row < local_rows && col < local_cols)
+							if(row >= 0 && col >= 0 && row < local_rows && col < local_cols) {
+								#pragma omp atomic write
 								land_mask[row][col] = 0;
+							}
 						}
 						else {
-							if(row >= 0 && col >= 0 && row < local_rows && col < local_cols)
-#ifdef USE_MASK
+							if(row >= 0 && col >= 0 && row < local_rows && col < local_cols) {
+								#pragma omp atomic write
 								land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] * (1 - p));
-#else
-								land_mask[row][col] = 1; 
-#endif /* USE_MASK */
+							}
 						}
 					}
 				}
-#endif /* defined(USE_BOOL_MASK) || defined(USE_MASK) */
 			}
 
 			// renormalize every nstep steps
@@ -394,15 +350,15 @@ int main(int argc, char *argv[]) {
 				MPI_Allreduce(MPI_IN_PLACE, &land_grid_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 				}
 				if (land_grid_mean > 100) {
-					if (me == 0)
+					if (me == 0) {
+						#pragma omp single
 						println("Normalizing by %f", land_grid_mean);
+					}
 
-#ifdef TREE
 					for (tuple<size_t, cell_type, cell_type> &event : speciation_events) {
 						get<1>(event) = get<1>(event) / land_grid_mean;
 						get<2>(event) = get<2>(event) / land_grid_mean;
 					}
-#endif /* TREE */
 
 					#pragma omp for
 					for (size_t i = 0; i < ghost_dims[0]; i++)
@@ -426,11 +382,16 @@ int main(int argc, char *argv[]) {
 		fclose(fp);
 		}
 
-#ifdef TREE
 		// gather speciation events
-		vector<tuple<size_t, cell_type, cell_type>> global_speciation_events = mxx::gatherv(speciation_events, 0);
+		#pragma omp critical
+		{
+			process_speciation_events.insert(process_speciation_events.end(), speciation_events.begin(), speciation_events.end());
+		}
+		#pragma omp barrier
+		#pragma omp single
+		{
+		global_speciation_events = mxx::gatherv(process_speciation_events, 0);
 		// gather extant species set
-		debug("Gathering extant species list");
 		set<cell_type> extant_species(ghost_grid_ptr+GHOSTS*ghost_grid_ld[0]+GHOSTS, ghost_grid_ptr+(local_rows + GHOSTS) * ghost_grid_ld[0] + local_cols + GHOSTS);
 		vector<cell_type> extant_species_vec(extant_species.begin(), extant_species.end());
 		debug("Local extant species: %d", extant_species.size());
@@ -456,7 +417,6 @@ int main(int argc, char *argv[]) {
 					debug("Error: did not find node with value %f", old_val);
 					debug("%s", toString_final(tree, timescale).c_str());
 					GA_Error(find_err, 1);
-					return 1;
 				}
 				speciation_tree_node *old_child = new speciation_tree_node(old_val, timestep, parent_node);
 				speciation_tree_node *new_child = new speciation_tree_node(new_val, timestep, parent_node);
@@ -477,14 +437,10 @@ int main(int argc, char *argv[]) {
 			delete_tree(tree);
 			fout.close();
 		}
-#endif /* TREE */
-
-		#pragma omp single
-		{
 		out_end_time = std::chrono::system_clock::now();
 		std::chrono::duration<double> out_time = out_end_time - out_start_time;
 		println("Output run time = %fs", out_time.count());
-		}
+		} // end #pragma omp single
 	}
 
 } /* #pragma omp parallel */
