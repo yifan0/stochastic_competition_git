@@ -130,6 +130,7 @@ void speciation_event(speciation_tree_node* old_species, speciation_tree_node* n
     } else if(old_species->parent->right_child == nullptr) {
         old_species->parent->right_child = new_species;
         new_species->parent = old_species->parent;
+        old_species->time = new_species->time;
         return;
     }
 
@@ -180,10 +181,10 @@ bool nonbinaryNode(speciation_tree_node* node) {
 // pruning algorithm
 // while there are more leaves than species, prune the leaves that are extinct
 //  for every leaf, check if it is extinct
-//    if it is extent, then do nothing
+//    if it is extant, then do nothing
 //    if it is extinct, then check if its sibling is a leaf
-//    if its sibling is an internal node or an extant leaf, then remove the current node and promote it sibling to replace the parent
-//    if its sibling is an exinct leaf, then remove both the leaf and its sibling, and make the parent a leaf
+//    if its sibling is an internal node or an extant leaf, then remove the current node and promote its sibling to replace the parent
+//    if its sibling is an extinct leaf, then remove both the leaf and its sibling, and make the parent a leaf
 speciation_tree_node* prune(speciation_tree_node* node, const std::set<cell_type>& extant_species) {
     if (node == nullptr) {
         return nullptr;
