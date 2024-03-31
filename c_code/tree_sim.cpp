@@ -321,6 +321,7 @@ int main(int argc, char* argv[]){
 
         out_start_time = std::chrono::system_clock::now();
         set<speciation_tree_node*> species;
+        set<cell_type> extant_species;
         FILE *fp;
         outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".log";
         fp = fopen(outfile.c_str(), "w");
@@ -328,10 +329,12 @@ int main(int argc, char* argv[]){
             for(int j = 0; j < size-1; j++) {
                 fprintf(fp, "%f", land_grid[i][j]->val);
                 fprintf(fp, ", ");
-                species.insert(land_grid[i][j]);
+                // species.insert(land_grid[i][j]);
+                extant_species.insert(land_grid[i][j]->val);
             }
             fprintf(fp, "%f\n", land_grid[i][size-1]->val);
-            species.insert(land_grid[i][size-1]);
+            // species.insert(land_grid[i][size-1]);
+            extant_species.insert(land_grid[i][size-1]->val);
         }
         fclose(fp);
         println("Wrote results to file %s", outfile.c_str());
@@ -339,27 +342,49 @@ int main(int argc, char* argv[]){
         outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".tree";
         fp = fopen(outfile.c_str(), "w");
         println("Depth of tree before pruning = %d", get_depth(speciation_root));
-        prune(speciation_root, species);
-        // prune_test(speciation_root, species, speciation_root);
-        string temp_tree = toString(speciation_root);
-        int tree_count = count(temp_tree.begin(), temp_tree.end(), '.');
-        while (tree_count != species.size() + missed){
-            cout << "tree_count = " << tree_count << endl;
-            cout << "prune again" << endl;
-            prune(speciation_root, species);
-            temp_tree = toString(speciation_root);
-            tree_count = count(temp_tree.begin(), temp_tree.end(), '.');
-        }
-        string output_tree;
-        // if missed an extinct species in pruning, output the tree ignoring that species
-        if (::missed){
-            // output_tree = toString(speciation_root->left_child);
-            output_tree = toString_final(speciation_root->left_child, timescale);
-        }
-        else {
-            // output_tree = toString(speciation_root);
-            output_tree = toString_final(speciation_root, timescale);
-        }
+        println("tree before pruning = %s", toString(speciation_root).c_str());
+        println("tree before pruning Newick = %s", printNewick(speciation_root).c_str());
+        // Old Algorithm
+        // 
+        // 
+        // speciation_root = prune(speciation_root, extant_species);
+        // // prune(speciation_root, species);
+        // // prune_test(speciation_root, species, speciation_root);
+        // string temp_tree = toString(speciation_root);
+        // int tree_count = count(temp_tree.begin(), temp_tree.end(), '.');
+        // while (tree_count != species.size() + missed){
+        //     cout << "tree_count = " << tree_count << endl;
+        //     cout << "prune again" << endl;
+        //     speciation_root = prune(speciation_root, extant_species);
+        //     // prune(speciation_root, species);
+        //     // println("tree after pruning = %s", toString(speciation_root).c_str());
+        //     temp_tree = toString(speciation_root);
+        //     tree_count = count(temp_tree.begin(), temp_tree.end(), '.');
+        // }
+        // string output_tree;
+        // // if missed an extinct species in pruning, output the tree ignoring that species
+        // if (::missed){
+        //     // output_tree = toString(speciation_root->left_child);
+        //     output_tree = toString_final(speciation_root->left_child, timescale);
+        // }
+        // else {
+        //     // output_tree = toString(speciation_root);
+        //     output_tree = toString_final(speciation_root, timescale);
+        // }
+        // println("tree after all pruning = %s", toString(speciation_root).c_str());
+        // println("tree after all pruning output = %s", output_tree.c_str());
+        // 
+        // 
+        // 
+        // New Algorithm
+        speciation_root = pruneExtinctSpecies(speciation_root,extant_species);
+        string output_tree = printNewick(speciation_root,timescale);
+        println("tree after pruneExtinctSpecies print with printNewick = %s", printNewick(speciation_root).c_str());
+        println("tree after pruneExtinctSpecies print with toString = %s", toString(speciation_root).c_str());
+        println("tree after pruneExtinctSpecies print with toString_final = %s", toString_final(speciation_root,timescale).c_str());
+        // 
+        // 
+        // 
         fprintf(fp, "%s;", output_tree.c_str());
         println("Unique species = %d", species.size());
         println("Depth of tree = %d", get_depth(speciation_root));
