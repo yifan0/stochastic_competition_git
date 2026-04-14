@@ -21,6 +21,8 @@ FetchContent_MakeAvailable(mxx)
 
 add_subdirectory(agner_random)
 include_directories(include)
+include_directories(sims)
+include_directories(stats)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -std=c++17")
 
 set(targets
@@ -30,12 +32,11 @@ set(targets
     ga_sim_no_tree
     ga_sim1D
     ga_sim1D_hydro
-    benchmark
     tree_sim
 )
 
 foreach(TARGET ${targets})
-    add_executable(${TARGET} "${TARGET}.cpp")
+    add_executable(${TARGET} "sims/${TARGET}.cpp")
     target_compile_features(${TARGET} PUBLIC cxx_std_17)
     target_include_directories(${TARGET} PUBLIC ${PROJECT_SOURCE_DIR}/agner_random)
 endforeach(TARGET)
