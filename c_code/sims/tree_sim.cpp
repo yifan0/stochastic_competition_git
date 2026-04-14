@@ -3,7 +3,6 @@
 #include <random> // rand()
 #include <string.h> // memcpy()
 #include <queue> // queue
-#include <omp.h>
 #include <time.h>
 #include <chrono>
 #include <set>
