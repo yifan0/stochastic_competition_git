@@ -31,6 +31,7 @@ set(targets
     ga_sim1D
     ga_sim1D_hydro
     tree_sim
+    sim_with_args
 )
 
 foreach(TARGET ${targets})
@@ -66,8 +67,15 @@ target_include_directories(ga_sim1D_hydro PUBLIC ${globalarrays_SOURCE_DIR}/glob
 target_include_directories(ga_sim1D_hydro PUBLIC ${globalarrays_BINARY_DIR}/ma)
 target_include_directories(ga_sim1D_hydro PUBLIC ${globalarrays_BINARY_DIR}/gaf2c)
 
+target_include_directories(sim_with_args PUBLIC ${globalarrays_SOURCE_DIR}/ma)
+target_include_directories(sim_with_args PUBLIC ${globalarrays_SOURCE_DIR}/ga++/src)
+target_include_directories(sim_with_args PUBLIC ${globalarrays_SOURCE_DIR}/global/src)
+target_include_directories(sim_with_args PUBLIC ${globalarrays_BINARY_DIR}/ma)
+target_include_directories(sim_with_args PUBLIC ${globalarrays_BINARY_DIR}/gaf2c)
+target_include_directories(sim_with_args PUBLIC ${mxx_SOURCE_DIR}/include)
+
 target_link_libraries(ga_sim GlobalArrays::ga MPI::MPI_CXX Agner)
 target_link_libraries(ga_sim_no_tree GlobalArrays::ga MPI::MPI_CXX Agner)
 target_link_libraries(ga_sim1D GlobalArrays::ga MPI::MPI_CXX)
 target_link_libraries(ga_sim1D_hydro GlobalArrays::ga MPI::MPI_CXX)
-
+target_link_libraries(sim_with_args GlobalArrays::ga MPI::MPI_CXX Agner)
