@@ -15,7 +15,9 @@ static struct argp_option options[] = {
     { "reps", 'n', "REPS", 0, "Number of repetitions."},
     { "specrate", 'c', "SPEC_RATE", 0, "Speciation rate."},
     { "mutsize", 'm', "MUT_SIZE", 0, "Maximum change in mutation event."},
-    // TODO: add options for running statistics
+    { "diff",  'u', 0, 0, "Run difference statistic."},
+    { "div",   'v', 0, 0, "Run diversity statistic."},
+    { "width", 'w', 0, 0, "Run width statistic."},
     { 0 }
 };
 
@@ -29,6 +31,9 @@ struct arguments {
     int reps;
     double specrate;
     double mutsize;
+    bool diff;
+    bool div;
+    bool width;
 };
 
 static error_t parse_opt(int key, char *arg, struct argp_state *state) {
@@ -43,6 +48,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
     case 'n': arguments->reps = atoi(arg); break;
     case 'c': arguments->specrate = atof(arg); break;
     case 'm': arguments->mutsize = atof(arg); break;
+    case 'u': arguments->diff = true; break;
+    case 'v': arguments->div = true; break;
+    case 'w': arguments->width = true; break;
     case ARGP_KEY_ARG: return 0;
     default: return ARGP_ERR_UNKNOWN;
     }
@@ -65,6 +73,9 @@ int main(int argc, char *argv[])
     arguments.reps = 10;
     arguments.specrate = 0.1;
     arguments.mutsize = 0.01;
+    arguments.diff = false;
+    arguments.div = false;
+    arguments.width = false;
 
     argp_parse(&argp, argc, argv, 0, 0, &arguments);
 
@@ -77,6 +88,9 @@ int main(int argc, char *argv[])
     fprintf(stdout, "reps = %d\n", arguments.reps);
     fprintf(stdout, "specrate = %f\n", arguments.specrate);
     fprintf(stdout, "mutsize = %f\n", arguments.mutsize);
+    fprintf(stdout, "diff = %s\n", arguments.diff ? "true" : "false");
+    fprintf(stdout, "div = %s\n", arguments.div ? "true" : "false");
+    fprintf(stdout, "width = %s\n", arguments.width ? "true" : "false");
 
     // TODO: add the actual simulation code from other files
 
