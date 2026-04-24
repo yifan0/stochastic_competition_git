@@ -24,12 +24,13 @@
 #include <mxx/reduction.hpp>
 using namespace std;
 
+// TODO: check if any of the includes are superfluous
+
 #define println(...) { if(me == 0) { printf(__VA_ARGS__); printf("\n"); } }
 #define debug(...) { if(true) { printf("Rank %d: ", me); printf(__VA_ARGS__); printf("\n"); fflush(stdout); } }
 #define print(...) { printf(__VA_ARGS__); }
 
-#define NDIM 2
-#define GHOSTS 2
+#define GHOSTS 2 // TODO: check what this should actually be in order to optimize and maintain correctness
 
 typedef std::tuple<int, int, cell_type> cell_update;
 
@@ -49,46 +50,35 @@ set<int> event_list(CRandomSFMT1& rng, StochasticLib1& srng, size_t n, double p)
 
 
 int main(int argc, char *argv[]) {
-	int nrep = 10;
-	int size = 100;
-	double p = 0.1;
-	double mutsize = 0.1;
-	double specrate = 0.0001; // 1.0e-4
-	int timescale = 100 * size / p;
-	int nsteps = 100;
-	int endtime = timescale / nsteps;
-	std::string outfile;
-	std::chrono::time_point<std::chrono::system_clock> start_time, end_time, rep_start_time, rep_end_time, out_start_time, out_end_time;
-	int me, nprocs;
-	int dims[NDIM];
-	int grid_ld[NDIM];
-	int lo[NDIM], hi[NDIM];
-	int ghost_grid_ld[NDIM - 1];
-	int ghost_dims[NDIM];
-	int ghost_width[NDIM];
-	double *land_grid_ptr, *ghost_grid_ptr;
-	int heap = 3000000, stack = 3000000;
-	FILE *fp;
 
 	MPI_Init(&argc, &argv);
-	int num_procs = 0;
-	MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+	int mpi_num_procs = 0;
+	MPI_Comm_size(MPI_COMM_WORLD, &mpi_num_procs);
 	GA_Initialize();
 	char init_err_msg[] = "MA_init failed";
+	int heap = 3000000, stack = 3000000;
 	if (!MA_init(C_DBL, stack, heap))
 		GA_Error(init_err_msg, stack + heap);
 
-	me = GA_Nodeid();
-	nprocs = GA_Nnodes();
+	int me = GA_Nodeid();
+	int nprocs = GA_Nnodes();
 
-	cxxopts::Options options("mpirun -n N ./ga_sim", "Stocastic competition simulation with GlobalArray parallelism");
+	cxxopts::Options options("mpirun -n N ./ga_sim", "Stocastic competition simulation on a grid. Each cell contains a single individual with a trait value. Each step, individuals reproduce with mutation and speciation, and compete with neighbors. Output is the trait value across the grid, and optionally a tree file of speciation events.");
 
 	options.add_options()
-		("s,size", "grid size", cxxopts::value<int>()->default_value("500"))
+		("s,size", "grid size (size^dims)", cxxopts::value<int>()->default_value("500"))
+		("t,tree", "generate tree file", cxxopts::value<bool>()->default_value("false"))
 		("c,specrate", "speciation rate", cxxopts::value<double>()->default_value("0.0001"))
+		("d,dims", "dimension of grid (size^dims)", cxxopts::value<int>()->default_value("2"))
+		("p,patch_count", "number of individuals per patch (inverse of p)", cxxopts::value<double>()->default_value("1"))
 		("r,reps", "number of repetitions", cxxopts::value<int>()->default_value("1"))
 		("m,mutsize", "maximum change in mutation event", cxxopts::value<double>()->default_value("0.1"))
+		("f,file_out", "output file on/off", cxxopts::value<bool>()->default_value("false"))
 		("o,outfile", "output file prefix", cxxopts::value<std::string>()->default_value("out"))
+		("n,nsteps", "number of steps to run", cxxopts::value<int>()->default_value("100"))
+		("u,diff", "run difference statistic", cxxopts::value<bool>()->default_value("false"))
+		("v,div", "run diversity statistic", cxxopts::value<bool>()->default_value("false"))
+		("w,width", "run width statistic", cxxopts::value<bool>()->default_value("false"))
 		("h,help", "Print usage")
 		;
 
@@ -100,24 +90,40 @@ int main(int argc, char *argv[]) {
 		MPI_Finalize();
 		exit(0);
 	}
-	size = result["size"].as<int>();
-	nrep = result["reps"].as<int>();
-	specrate = result["specrate"].as<double>();
-	mutsize = result["mutsize"].as<double>();
+	int size = result["size"].as<int>();
+	int nrep = result["reps"].as<int>();
+	double specrate = result["specrate"].as<double>();
+	double mutsize = result["mutsize"].as<double>();
+	std::string outfile = result["outfile"].as<std::string>();
+	int nsteps = result["nsteps"].as<int>();
+	double p = 1 / result["patch_count"].as<double>();
+	int timescale = 100 * (size * 1.0 / p);
+	int endtime = timescale / nsteps;
+	int ndims = result["dims"].as<int>();
+	bool run_diff_stat = result["diff"].as<bool>();
+	bool run_div_stat = result["div"].as<bool>();
+	bool run_width_stat = result["width"].as<bool>();
+	int dims[ndims];
+	int grid_ld[ndims];
+	int lo[ndims], hi[ndims];
+	int ghost_grid_ld[ndims - 1];
+	int ghost_dims[ndims];
+	int ghost_width[ndims];
+	double *land_grid_ptr, *ghost_grid_ptr;
+	FILE *fp;
 
-	timescale = 100 * (size * 1.0 / p);
-	endtime = timescale / nsteps;
+	std::chrono::time_point<std::chrono::system_clock> start_time, end_time, rep_start_time, rep_end_time, out_start_time, out_end_time;
 
 	start_time = std::chrono::system_clock::now();
 
 	// grid for average across reps
 	GA_Mask_sync(0, 0); // turns off sync when updating ghosts
-	for (size_t i = 0; i < NDIM; i++) {
+	for (size_t i = 0; i < ndims; i++) {
 		dims[i] = size;
 		ghost_width[i] = GHOSTS;
 	}
 	char land_grid_name[] = "land grid";
-	int ga_land_grid = NGA_Create_ghosts(C_DBL, NDIM, dims, ghost_width, land_grid_name, NULL);
+	int ga_land_grid = NGA_Create_ghosts(C_DBL, ndims, dims, ghost_width, land_grid_name, NULL);
 	if (ga_land_grid == 0) {
 		char create_err[] = "Failure for NGA_Create_ghosts()";
 		GA_Error(create_err, 1);
@@ -139,7 +145,7 @@ int main(int argc, char *argv[]) {
 	println("\ttimescale = %d", timescale);
 	println("\tnsteps = %d", nsteps);
 	println("\tend time = %d", endtime);
-	println("\tprocesses = %d", num_procs);
+	println("\tprocesses = %d", mpi_num_procs);
 	println("");
 	fflush(stdout);
 
@@ -265,7 +271,7 @@ int main(int argc, char *argv[]) {
 					}
 				}
 			}
-			
+
 			for (const auto &[i, j, val] : updates) {
 				ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] = val;
 				for (int x = -1; x <= 1; x++) {
@@ -333,7 +339,7 @@ int main(int argc, char *argv[]) {
 		std::chrono::duration<double> rep_time = rep_end_time - rep_start_time;
 		println("Rep %d run time = %fs", rep, rep_time.count());
 		fflush(stdout);
-		
+
 		out_start_time = std::chrono::system_clock::now();
 		outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".csv";
 		fp = fopen(outfile.c_str(), "w");
