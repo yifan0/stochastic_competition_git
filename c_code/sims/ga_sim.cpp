@@ -197,7 +197,7 @@ int main(int argc, char *argv[]) {
 		int inv_index = 0;
 
 		// track speciation events
-		vector<tuple<size_t, cell_type, cell_type>> speciation_events;
+		vector<tuple<size_t, cell_type, cell_type>> speciation_events; // only used when generate_tree == true
 
 		int row, col;
 		for (int step = 0; step < timescale; step++) {
@@ -214,7 +214,8 @@ int main(int argc, char *argv[]) {
 					cell_type old_val = ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS];
 					cell_type new_val = old_val * ratio;
 					ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] = new_val;
-					speciation_events.push_back(make_tuple(step, old_val, new_val));
+					if (generate_tree)
+						speciation_events.push_back(make_tuple(step, old_val, new_val));
 				}
 
 				// set mask for [i][j] and surrounding cells unless on edge
@@ -330,9 +331,11 @@ int main(int argc, char *argv[]) {
 					if (me == 0)
 						println("Normalizing by %f", land_grid_mean);
 
-					for (tuple<size_t, cell_type, cell_type> &event : speciation_events) {
-						get<1>(event) = get<1>(event) / land_grid_mean;
-						get<2>(event) = get<2>(event) / land_grid_mean;
+					if (generate_tree) {
+						for (tuple<size_t, cell_type, cell_type> &event : speciation_events) {
+							get<1>(event) = get<1>(event) / land_grid_mean;
+							get<2>(event) = get<2>(event) / land_grid_mean;
+						}
 					}
 
 					for (size_t i = 0; i < ghost_dims[0]; i++)
@@ -356,45 +359,45 @@ int main(int argc, char *argv[]) {
 		}
 
 		// gather speciation events
-		vector<tuple<size_t, cell_type, cell_type>> global_speciation_events = mxx::gatherv(speciation_events, 0);
-		// gather extant species set
-		debug("Gathering extant species list");
-		set<cell_type> extant_species(ghost_grid_ptr+GHOSTS*ghost_grid_ld[0]+GHOSTS, ghost_grid_ptr+(local_rows + GHOSTS) * ghost_grid_ld[0] + local_cols + GHOSTS);
-		vector<cell_type> extant_species_vec(extant_species.begin(), extant_species.end());
-		debug("Local extant species: %lu", extant_species.size());
-		vector<cell_type> global_extant_species_vec = mxx::gatherv(extant_species_vec, 0);
-		if (me == 0) {
-			set<cell_type> global_extant_species(global_extant_species_vec.begin(), global_extant_species_vec.end());
-			debug("Global extant species: %lu", global_extant_species.size());
-			map<cell_type, speciation_tree_node*> leaves;
-			// sort global_speciation_events by timestep
-			sort(global_speciation_events.begin(), global_speciation_events.end());
-			speciation_tree_node *tree = new speciation_tree_node(get<1>(global_speciation_events[0]), 0, nullptr);
-			leaves[get<1>(global_speciation_events[0])] = tree;
-			debug("Creating tree");
-			for (tuple<size_t, cell_type, cell_type> event : global_speciation_events) {
-				size_t timestep = get<0>(event);
-				cell_type old_val = get<1>(event);
-				cell_type new_val = get<2>(event);
-				// instead of finding the node by traversing the tree, just look it up in a hash map (for performance)
-				// speciation_tree_node *parent_node = find_node(tree, old_val);
-				speciation_tree_node *parent_node = leaves[old_val];
-				if (!parent_node) {
-					char find_err[] = "Did not find node with value";
-					debug("Error: did not find node with value %f", old_val);
-					debug("%s", toString_final(tree, timescale).c_str());
-					GA_Error(find_err, 1);
-					return 1;
+		if (generate_tree) {
+			vector<tuple<size_t, cell_type, cell_type>> global_speciation_events = mxx::gatherv(speciation_events, 0);
+			// gather extant species set
+			debug("Gathering extant species list");
+			set<cell_type> extant_species(ghost_grid_ptr+GHOSTS*ghost_grid_ld[0]+GHOSTS, ghost_grid_ptr+(local_rows + GHOSTS) * ghost_grid_ld[0] + local_cols + GHOSTS);
+			vector<cell_type> extant_species_vec(extant_species.begin(), extant_species.end());
+			debug("Local extant species: %lu", extant_species.size());
+			vector<cell_type> global_extant_species_vec = mxx::gatherv(extant_species_vec, 0);
+			if (me == 0) {
+				set<cell_type> global_extant_species(global_extant_species_vec.begin(), global_extant_species_vec.end());
+				debug("Global extant species: %lu", global_extant_species.size());
+				map<cell_type, speciation_tree_node*> leaves;
+				// sort global_speciation_events by timestep
+				sort(global_speciation_events.begin(), global_speciation_events.end());
+				speciation_tree_node *tree = new speciation_tree_node(get<1>(global_speciation_events[0]), 0, nullptr);
+				leaves[get<1>(global_speciation_events[0])] = tree;
+				debug("Creating tree");
+				for (tuple<size_t, cell_type, cell_type> event : global_speciation_events) {
+					size_t timestep = get<0>(event);
+					cell_type old_val = get<1>(event);
+					cell_type new_val = get<2>(event);
+					// instead of finding the node by traversing the tree, just look it up in a hash map (for performance)
+					// speciation_tree_node *parent_node = find_node(tree, old_val);
+					speciation_tree_node *parent_node = leaves[old_val];
+					if (!parent_node) {
+						char find_err[] = "Did not find node with value";
+						debug("Error: did not find node with value %f", old_val);
+						debug("%s", toString_final(tree, timescale).c_str());
+						GA_Error(find_err, 1);
+						return 1;
+					}
+					speciation_tree_node *old_child = new speciation_tree_node(old_val, timestep, parent_node);
+					speciation_tree_node *new_child = new speciation_tree_node(new_val, timestep, parent_node);
+					parent_node->left_child = old_child;
+					parent_node->right_child = new_child;
+					leaves[old_val] = old_child;
+					leaves[new_val] = new_child;
 				}
-				speciation_tree_node *old_child = new speciation_tree_node(old_val, timestep, parent_node);
-				speciation_tree_node *new_child = new speciation_tree_node(new_val, timestep, parent_node);
-				parent_node->left_child = old_child;
-				parent_node->right_child = new_child;
-				leaves[old_val] = old_child;
-				leaves[new_val] = new_child;
-			}
 
-			if (generate_tree) {
 				// prune extinct species
 				debug("Pruning tree");
 				tree = prune(tree, global_extant_species);
