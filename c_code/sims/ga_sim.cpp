@@ -27,7 +27,6 @@ using namespace std;
 // TODO: check if any of the includes are superfluous
 
 #define println(...) { if(me == 0) { printf(__VA_ARGS__); printf("\n"); } }
-#define debug(...) { if(true) { printf("Rank %d: ", me); printf(__VA_ARGS__); printf("\n"); fflush(stdout); } }
 #define print(...) { printf(__VA_ARGS__); }
 
 #define GHOSTS 2 // TODO: check what this should actually be in order to optimize and maintain correctness
@@ -59,9 +58,11 @@ int main(int argc, char *argv[]) {
 	int heap = 3000000, stack = 3000000;
 	if (!MA_init(C_DBL, stack, heap))
 		GA_Error(init_err_msg, stack + heap);
-
 	int me = GA_Nodeid();
 	int nprocs = GA_Nnodes();
+
+	std::chrono::time_point<std::chrono::system_clock> start_time;
+	std::chrono::time_point<std::chrono::system_clock> end_time, rep_start_time, rep_end_time, out_start_time, out_end_time;
 
 	cxxopts::Options options("mpirun -n N ./ga_sim", "Stocastic competition simulation on a grid. Each cell contains a single individual with a trait value. Each step, individuals reproduce with mutation and speciation, and compete with neighbors. Output is the trait value across the grid, and optionally a tree file of speciation events.");
 
@@ -74,7 +75,7 @@ int main(int argc, char *argv[]) {
 		("r,reps", "number of repetitions", cxxopts::value<int>()->default_value("1"))
 		("m,mutsize", "maximum change in mutation event", cxxopts::value<double>()->default_value("0.1"))
 		("f,file_out", "output file on/off", cxxopts::value<bool>()->default_value("false"))
-		("o,outfile", "output file prefix", cxxopts::value<std::string>()->default_value("out"))
+		("o,outfile", "output file prefix (for csv and/or tree files)", cxxopts::value<std::string>()->default_value("out"))
 		("n,nsteps", "number of steps to run", cxxopts::value<int>()->default_value("100"))
 		("u,diff", "run difference statistic", cxxopts::value<bool>()->default_value("false"))
 		("v,div", "run diversity statistic", cxxopts::value<bool>()->default_value("false"))
@@ -100,9 +101,6 @@ int main(int argc, char *argv[]) {
 	int timescale = 100 * (size * 1.0 / p);
 	int endtime = timescale / nsteps;
 	int ndims = result["dims"].as<int>();
-	bool run_diff_stat = result["diff"].as<bool>();
-	bool run_div_stat = result["div"].as<bool>();
-	bool run_width_stat = result["width"].as<bool>();
 	int dims[ndims];
 	int grid_ld[ndims];
 	int lo[ndims], hi[ndims];
@@ -112,7 +110,12 @@ int main(int argc, char *argv[]) {
 	double *land_grid_ptr, *ghost_grid_ptr;
 	FILE *fp;
 
-	std::chrono::time_point<std::chrono::system_clock> start_time, end_time, rep_start_time, rep_end_time, out_start_time, out_end_time;
+	// boolean options
+	bool generate_tree = result["tree"].as<bool>(); // TODO: implement option in code
+	bool file_out = result["file_out"].as<bool>(); // TODO: implement option in code
+	bool run_div_stat = result["div"].as<bool>(); // TODO: implement option in code
+	bool run_width_stat = result["width"].as<bool>(); // TODO: implement option in code
+	bool run_diff_stat = result["diff"].as<bool>(); // TODO: implement option in code
 
 	start_time = std::chrono::system_clock::now();
 
@@ -139,6 +142,7 @@ int main(int argc, char *argv[]) {
 	println("Inputs:");
 	println("\trepetitions = %d", nrep);
 	println("\tsize = %d%s%d", size, "x", size);
+	println("\tdimensions = %d", ndims);
 	println("\tindividuals per patch = %f", 1 / p);
 	println("\tmutation size = %f", mutsize);
 	println("\tspeciation rate = %.2e", specrate);
@@ -146,6 +150,9 @@ int main(int argc, char *argv[]) {
 	println("\tnsteps = %d", nsteps);
 	println("\tend time = %d", endtime);
 	println("\tprocesses = %d", mpi_num_procs);
+	println("\tgenerate tree = %s", generate_tree ? "true" : "false");
+	println("\tfile output = %s", file_out ? "true" : "false");
+	println("\tstatistics run: diversity = %s, width = %s, difference = %s", run_div_stat ? "true" : "false", run_width_stat ? "true" : "false", run_diff_stat ? "true" : "false");
 	println("");
 	fflush(stdout);
 
@@ -341,10 +348,12 @@ int main(int argc, char *argv[]) {
 		fflush(stdout);
 
 		out_start_time = std::chrono::system_clock::now();
-		outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".csv";
-		fp = fopen(outfile.c_str(), "w");
-		GA_Print_csv_file(fp, ga_land_grid);
-		fclose(fp);
+		if (file_out) {
+			outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".csv";
+			fp = fopen(outfile.c_str(), "w");
+			GA_Print_csv_file(fp, ga_land_grid);
+			fclose(fp);
+		}
 
 		// gather speciation events
 		vector<tuple<size_t, cell_type, cell_type>> global_speciation_events = mxx::gatherv(speciation_events, 0);
@@ -352,11 +361,11 @@ int main(int argc, char *argv[]) {
 		debug("Gathering extant species list");
 		set<cell_type> extant_species(ghost_grid_ptr+GHOSTS*ghost_grid_ld[0]+GHOSTS, ghost_grid_ptr+(local_rows + GHOSTS) * ghost_grid_ld[0] + local_cols + GHOSTS);
 		vector<cell_type> extant_species_vec(extant_species.begin(), extant_species.end());
-		debug("Local extant species: %d", extant_species.size());
+		debug("Local extant species: %lu", extant_species.size());
 		vector<cell_type> global_extant_species_vec = mxx::gatherv(extant_species_vec, 0);
 		if (me == 0) {
 			set<cell_type> global_extant_species(global_extant_species_vec.begin(), global_extant_species_vec.end());
-			debug("Global extant species: %d", global_extant_species.size());
+			debug("Global extant species: %lu", global_extant_species.size());
 			map<cell_type, speciation_tree_node*> leaves;
 			// sort global_speciation_events by timestep
 			sort(global_speciation_events.begin(), global_speciation_events.end());
@@ -385,16 +394,20 @@ int main(int argc, char *argv[]) {
 				leaves[new_val] = new_child;
 			}
 
-			// prune extinct species
-			debug("Pruning tree");
-			tree = prune(tree, global_extant_species);
-			debug("Pruned, root time = %d", tree->time);
+			if (generate_tree) {
+				// prune extinct species
+				debug("Pruning tree");
+				tree = prune(tree, global_extant_species);
+				debug("Pruned, root time = %lu", tree->time);
 
-			outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".tree";
-			ofstream fout(outfile.c_str());
-			fout << toString_final(tree, timescale) << endl;
-			delete_tree(tree);
-			fout.close();
+				if (file_out) {
+					outfile = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + ".tree";
+					ofstream fout(outfile.c_str());
+					fout << toString_final(tree, timescale) << endl;
+					delete_tree(tree);
+					fout.close();
+				}
+			}
 		}
 
 		out_end_time = std::chrono::system_clock::now();
@@ -405,7 +418,8 @@ int main(int argc, char *argv[]) {
 	end_time = std::chrono::system_clock::now();
 	std::chrono::duration<double> total_time = end_time - start_time;
 	println("Total run time = %fs", total_time.count());
-	println("Wrote results to file %s", outfile.c_str());
+	if (file_out)
+		println("Wrote results to file %s", outfile.c_str());
 	fflush(stdout);
 
 	GA_Destroy(ga_land_grid);

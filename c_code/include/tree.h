@@ -8,7 +8,7 @@ using namespace std;
 
 #ifndef TREE_
 
-#define println(...) { printf(__VA_ARGS__); printf("\n"); }
+#define printwarn(...) { printf(__VA_ARGS__); printf("\n"); }
 #define debug(...) { if(true) { printf("Rank %d: ", 0); printf(__VA_ARGS__); printf("\n"); fflush(stdout); } }
 // global variable indicating if there is a missed extinct species
 inline bool missed;
@@ -145,7 +145,7 @@ void speciation_event(speciation_tree_node* old_species, speciation_tree_node* n
     } else if(old_species->parent->right_child == old_species) {
         old_species->parent->right_child = internal_node;
     } else {
-        println("error adding new node");
+        printwarn("error adding new node");
     }
 
     new_species->parent = internal_node;
@@ -224,7 +224,7 @@ speciation_tree_node* prune(speciation_tree_node* node, const std::set<cell_type
 void prune(speciation_tree_node* root, set<speciation_tree_node*> species) {
     if(root == nullptr){
         return;
-    } 
+    }
     if(species.count(root) == 0 && root->left_child == nullptr && root->right_child == nullptr) {
         // return when parent of parent is nullptr
         if (root->parent->parent == nullptr){
@@ -244,7 +244,7 @@ void prune(speciation_tree_node* root, set<speciation_tree_node*> species) {
             parent->left_child = nullptr;
         }
         else {
-            println("Error pruning species");
+            printwarn("Error pruning species");
         }
 
         if(parent->parent->left_child == parent) {
@@ -266,7 +266,7 @@ void prune_test(speciation_tree_node* root, set<speciation_tree_node*> species, 
     if(root == nullptr){
         cout << "root null" << endl;
         return;
-    } 
+    }
     cout << "root called " << root->val << " at depth " << get_depth(root) << endl;
     cout << "tree at call " << toString(speciation_root).c_str() << endl;
     if(species.count(root) == 0 && root->left_child == nullptr && root->right_child == nullptr) {
@@ -289,7 +289,7 @@ void prune_test(speciation_tree_node* root, set<speciation_tree_node*> species, 
             parent->left_child = nullptr;
         }
         else {
-            println("Error pruning species");
+            printwarn("Error pruning species");
         }
         if(parent->parent->left_child == parent) {
             parent->parent->left_child = sibling;
