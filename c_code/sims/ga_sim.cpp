@@ -101,6 +101,12 @@ int main(int argc, char *argv[]) {
 	int timescale = 100 * (size * 1.0 / p);
 	int endtime = timescale / nsteps;
 	int ndims = result["dims"].as<int>();
+	if (ndims != 1 && ndims != 2) {
+		if (me == 0)
+			println("Only 1 and 2 dimensions are supported.");
+		MPI_Finalize();
+		exit(1);
+	}
 	int dims[ndims];
 	int grid_ld[ndims];
 	int lo[ndims], hi[ndims];
