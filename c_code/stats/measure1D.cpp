@@ -1,4 +1,7 @@
 // move window -- diversity & difference & width
+#ifndef MEASURE1D_H
+#define MEASURE1D_H
+
 #include <iostream>
 #include <fstream>
 #include <algorithm>
@@ -7,12 +10,8 @@
 #include <string>
 #include <sstream>
 #include <typeinfo>
+#include "print_msg.h"
 using namespace std;
-
-#define println(...) { printf(__VA_ARGS__); printf("\n"); }
-#define print(...) { printf(__VA_ARGS__); }
-
-// TODO: create function that has landscape passed in (by reference, but will not be modified), as well as diversity, difference, and width (passed by reference to be modified). Return value of int, so should return 0 for success
 
 int measure1D(vector<double>& landscape, vector<double>& diversity, vector<double>& difference, vector<double>& width) {
 
@@ -21,7 +20,7 @@ int measure1D(vector<double>& landscape, vector<double>& diversity, vector<doubl
     for (int p2=1; p2<max_window_size; p2++){
         int samp_size = pow(2,p2);
         if (samp_size > size) {
-            println("Skipping p2 = %d, samp_size = %d, size = %d due to samp_size > size", p2, samp_size, size);
+            println_all("Skipping p2 = %d, samp_size = %d, size = %d due to samp_size > size", p2, samp_size, size);
             continue;
         }
         cout << p2 << endl;
@@ -135,13 +134,4 @@ int measure1D(vector<double>& landscape, vector<double>& diversity, vector<doubl
 
 }
 
-int print_stat_to_csv(vector<double> stat, std::string file_name) {
-    ofstream myfile;
-    myfile.open(file_name);
-    for (int i = 0; i < stat.size()-1; i++) {
-        myfile << stat[i] << ",";
-    }
-    myfile << stat[stat.size()-1];
-    myfile.close();
-    return 0;
-}
+#endif // MEASURE1D_H

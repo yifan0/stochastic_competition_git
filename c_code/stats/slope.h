@@ -8,10 +8,8 @@
 #include <sstream>
 #include <typeinfo>
 #include <set>
+#include "print_msg.h"
 using namespace std;
-
-#define println(...) { printf(__VA_ARGS__); printf("\n"); }
-#define print(...) { printf(__VA_ARGS__); }
 
 double slope(const std::vector<double>& x, const std::vector<double>& y) {
     const auto n    = x.size();

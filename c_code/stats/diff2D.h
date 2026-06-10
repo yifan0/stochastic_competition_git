@@ -1,5 +1,8 @@
 // 2D difference and diversity measure
 // caveat: slow when there are many species (high specrate)
+#ifndef _DIFF2D_
+#define _DIFF2D_
+
 #include <iostream>
 #include <fstream>
 #include <algorithm>
@@ -11,11 +14,9 @@
 #include <typeinfo>
 #include <set>
 #include "species_count.h"
+#include "print_msg.h"
 // #include "slope.h"
 using namespace std;
-
-#define println(...) { printf(__VA_ARGS__); printf("\n"); }
-#define print(...) { printf(__VA_ARGS__); }
 
 // difference, diversity
 tuple<array<double,7>,array<double,7>> diff2D(string fname) {
@@ -27,6 +28,10 @@ tuple<array<double,7>,array<double,7>> diff2D(string fname) {
     string line, word; 
     int size = 0;
     // int nrep = 0;
+    for(int i = 0; i < diff_arr.size(); i++) {
+        diff_arr[i] = 0;
+        div_arr[i] = 0;
+    }
     if(file.is_open()){
         while(getline(file,line)){
             if (line == ""){
@@ -52,6 +57,11 @@ tuple<array<double,7>,array<double,7>> diff2D(string fname) {
     vector<double> sample_list;
     for (int p2=1; p2<=7; ++p2){
         int samp_size = pow(2,p2);
+        if (samp_size > size) {
+            println_all("Skipping p2 = %d, samp_size = %d, size = %d due to samp_size > size", p2, samp_size, size);
+            continue;
+        }
+
         sample_list.push_back(log(samp_size));
         cout << "p2 = " << p2 << endl;
         // initialize window
@@ -340,3 +350,5 @@ tuple<array<double,7>,array<double,7>> diff2D(string fname) {
     // double coeff_div = slope(sample_list,div);
     return make_tuple(diff_arr,div_arr);
 }
+
+#endif // _DIFF2D_

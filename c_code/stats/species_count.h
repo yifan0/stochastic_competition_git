@@ -1,4 +1,7 @@
 // species count
+#ifndef _SPECIES_COUNT_
+#define _SPECIES_COUNT_
+
 #include <iostream>
 #include <fstream>
 #include <algorithm>
@@ -9,10 +12,9 @@
 #include <sstream>
 #include <typeinfo>
 #include <set>
+#include "print_msg.h"
 using namespace std;
 
-#define println(...) { printf(__VA_ARGS__); printf("\n"); }
-#define print(...) { printf(__VA_ARGS__); }
 // div, species count, species fitness
 tuple<int, vector<int>, vector<double>> species_count(int size, vector<vector<double>> land_grid) {
     set<double> distinct_element;
@@ -39,3 +41,5 @@ tuple<int, vector<int>, vector<double>> species_count(int size, vector<vector<do
     // cout << endl;
     return make_tuple(div,species_count,species_fitness);
 }
+
+#endif // _SPECIES_COUNT_

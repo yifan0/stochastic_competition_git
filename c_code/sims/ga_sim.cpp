@@ -22,13 +22,12 @@
 #include "ga++.h"
 #include "tree.h"
 #include "measure1D.cpp"
+#include "width2D.h"
+#include "diff2D.h"
+#include "print_stats.h"
+#include "print_msg.h"
 #include <mxx/reduction.hpp>
 using namespace std;
-
-// TODO: check if any of the includes are superfluous
-
-#define println(...) { if(me == 0) { printf(__VA_ARGS__); printf("\n"); } }
-#define print(...) { printf(__VA_ARGS__); }
 
 #define GHOSTS 2
 #define GA_DIMS 2 // use 2 dims for array, just set one dim to size 1 when using 1D
@@ -82,6 +81,7 @@ int main(int argc, char *argv[]) {
 		("u,diff", "run difference statistic", cxxopts::value<bool>()->default_value("false"))
 		("v,div", "run diversity statistic", cxxopts::value<bool>()->default_value("false"))
 		("w,width", "run width statistic", cxxopts::value<bool>()->default_value("false"))
+        ("g,ghosts", "frequency to update ghosts (synchronize every g steps)", cxxopts::value<int>()->default_value("1"))
 		("h,help", "Print usage")
 		;
 
@@ -102,6 +102,7 @@ int main(int argc, char *argv[]) {
 	double p = 1 / result["patch_count"].as<double>();
 	int timescale = 100 * (size * 1.0 / p);
 	int endtime = timescale / nsteps;
+    int ghost_sync_period = result["ghosts"].as<int>();
 	int ndims = result["dims"].as<int>();
 	if (ndims != 1 && ndims != 2) {
 		if (me == 0)
@@ -129,6 +130,13 @@ int main(int argc, char *argv[]) {
         run_div_stat = true;
         run_width_stat = true;
         run_diff_stat = true;
+    }
+    if (ndims == 2 && (run_div_stat || run_diff_stat)) {
+        run_div_stat = true;
+        run_diff_stat = true;
+    }
+    if (ndims == 2 && (run_div_stat || run_diff_stat || run_width_stat)) {
+        file_out = true;
     }
 
 	start_time = std::chrono::system_clock::now();
@@ -175,6 +183,14 @@ int main(int argc, char *argv[]) {
 	println("\tgenerate tree = %s", generate_tree ? "true" : "false");
 	println("\tfile output = %s", file_out ? "true" : "false");
 	println("\tstatistics run: diversity = %s, width = %s, difference = %s", run_div_stat ? "true" : "false", run_width_stat ? "true" : "false", run_diff_stat ? "true" : "false");
+    if (ndims == 1 && run_div_stat) {
+        println("NOTE: for 1D, either all or no statistics are run.");
+    } else if (ndims == 2 && run_div_stat) {
+        println("NOTE: for 2D, either diversity and difference are run, or neither is run. Width is turned on/off separately.");
+    }
+    if (ndims == 2 && (run_div_stat || run_width_stat || run_diff_stat)) {
+        println("NOTE: for 2D, to calculate summary statistics, output file must be used.");
+    }
 	println("");
 	fflush(stdout);
 
@@ -264,7 +280,7 @@ int main(int argc, char *argv[]) {
 				}
 			}
 
-			if (step % 10 == 0)
+			if (step % ghost_sync_period == 0)
 				GA_Update_ghosts(ga_land_grid);
 
 			// invasion rule
@@ -439,35 +455,59 @@ int main(int argc, char *argv[]) {
 		}
 
 		if (run_div_stat || run_width_stat || run_diff_stat) {
+			std::string div_file = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_div.csv";
+			std::string diff_file = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_diff.csv";;
+			std::string width_file = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_width.csv";;
 			if (ndims == 1) {
-				// TODO: check the difference between land_grid_ptr and ghost_grid_ptr
-				// println("land_grid_ptr - ghost_grid_ptr = %d", land_grid_ptr - ghost_grid_ptr);
-				// println("lo[0] = %d, hi[0] = %d", lo[0], hi[0]);
-				// println("lo[1] = %d, hi[1] = %d", lo[1], hi[1]);
-				// println("local_cols = %d", local_cols);
 				vector<double> local_landscape_vec(land_grid_ptr, land_grid_ptr+local_cols);
-				// println("local_landscape_vec size = %d", local_landscape_vec.size());
 				std::string landscape_str(local_landscape_vec.begin(), local_landscape_vec.end());
-				// println("local_landscape_vec content = %s", landscape_str.c_str());
 				vector<double> landscape = mxx::gatherv(local_landscape_vec, 0);
-				// println("landscape size = %d", landscape.size());
 				if (me == 0) {
 					vector<double> diversity;
 					vector<double> difference;
 					vector<double> width;
-					std::string div_file = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_div.csv";
-					std::string diff_file = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_diff.csv";;
-					std::string width_file = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_width.csv";;
 					measure1D(landscape, diversity, difference, width);
-					print_stat_to_csv(diversity, div_file);
+					print_double_stat_to_csv(diversity, div_file);
 					println("Saved diversity to %s", div_file.c_str());
-					print_stat_to_csv(difference, diff_file);
+					print_double_stat_to_csv(difference, diff_file);
 					println("Saved difference to %s", diff_file.c_str());
-					print_stat_to_csv(width, width_file);
+					print_double_stat_to_csv(width, width_file);
 					println("Saved width to %s", width_file.c_str());
 				}
 			} else if (ndims == 2) {
-				// TODO: implement summary stats for 2D
+                // 2D stats are run from CSV file
+                if (run_width_stat) {
+                    if (me == 0) {
+                        std::string species_count_file = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_species_count.csv";
+                        std::string fitness_file = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_fitness.csv";
+                        std::string slope_file = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_slope.csv";
+                        tuple<array<double,10>,vector<int>,vector<double>,double> result = width2D(outfile);
+                        array<double,10> width_arr = get<0>(result);
+                        vector<int> species_count = get<1>(result);
+                        vector<double> species_fitness = get<2>(result);
+                        double coeff = get<3>(result);
+
+                        print_int_stat_to_csv(species_count, species_count_file.c_str());
+                        println("Saved species count to %s", species_count_file.c_str());
+                        print_double_to_csv(coeff, slope_file.c_str());
+                        println("Saved slope to %s", slope_file.c_str());
+                        print_double_stat_to_csv(species_fitness, fitness_file.c_str());
+                        println("Saved species fitness to %s", fitness_file.c_str());
+                        print_double_arr_to_csv(width_arr.data(), width_arr.size(), width_file.c_str());
+					    println("Saved width to %s", width_file.c_str());
+                    }
+                }
+                if (run_div_stat) { // div and diff are either both run or neither are run
+                    if (me == 0) {
+                        tuple<array<double,7>,array<double,7>> result = diff2D(outfile);
+                        array<double,7> diff_arr = get<0>(result);
+                        array<double,7> div_arr = get<1>(result);
+                        print_double_arr_to_csv(diff_arr.data(), diff_arr.size(), diff_file);
+                        println("Saved difference to %s", diff_file.c_str());
+                        print_double_arr_to_csv(div_arr.data(), div_arr.size(), div_file);
+                        println("Saved diversity to %s", div_file.c_str());
+                    }
+                }
 			} else {
 				println("Summary statistics unavailable for %d dimensions", ndims);
 			}

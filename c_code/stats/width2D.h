@@ -1,4 +1,7 @@
 // 2D width measure
+#ifndef _WIDTH2D_
+#define _WIDTH2D_
+
 #include <iostream>
 #include <fstream>
 #include <algorithm>
@@ -9,12 +12,10 @@
 #include <sstream>
 #include <typeinfo>
 #include <set>
+#include "print_msg.h"
 #include "species_count.h"
-// #include "slope.h"
+#include "slope.h"
 using namespace std;
-
-#define println(...) { printf(__VA_ARGS__); printf("\n"); }
-#define print(...) { printf(__VA_ARGS__); }
 
 // double slope(const std::vector<double>& x, const std::vector<double>& y) {
 //     const auto n    = x.size();
@@ -32,6 +33,9 @@ tuple<array<double,10>,vector<int>,vector<double>,double> width2D(string fname) 
     int p2_range = p2_end-p2_start+1;
     // load landscape
     array<double,10> width_arr;
+    for(int i = 0; i < width_arr.size(); i++) {
+        width_arr[i] = 0;
+    }
     width_arr[0]=0.0;
     width_arr[1]=0.0;
     width_arr[2]=0.0;
@@ -63,10 +67,10 @@ tuple<array<double,10>,vector<int>,vector<double>,double> width2D(string fname) 
     size = landscape[0].size();
     tuple<int, vector<int>, vector<double>> result = species_count(size, landscape);
     int div = get<0>(result);
-    vector<int> species_count = get<1>(result);
+    vector<int> species_count_result = get<1>(result);
     vector<double> species_fitness = get<2>(result);
     if (div == 1){
-        return make_tuple(width_arr,species_count, species_fitness, 0.0);
+        return make_tuple(width_arr,species_count_result, species_fitness, 0.0);
     }
     vector<double> width;
     vector<double> sample_list;
@@ -184,5 +188,7 @@ tuple<array<double,10>,vector<int>,vector<double>,double> width2D(string fname) 
     cout << endl;
     double coeff = slope(sample_list,width);
     cout << "slope" << coeff << endl;
-    return make_tuple(width_arr,species_count,species_fitness,coeff);
+    return make_tuple(width_arr,species_count_result,species_fitness,coeff);
 }
+
+#endif // _WIDTH2D_
