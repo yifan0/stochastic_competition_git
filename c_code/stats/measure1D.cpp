@@ -12,47 +12,26 @@ using namespace std;
 #define println(...) { printf(__VA_ARGS__); printf("\n"); }
 #define print(...) { printf(__VA_ARGS__); }
 
-int main() {
-    string fname = "landscape1D512_10.csv";
-    fstream file (fname, ios::in);
-    vector<double> landscape;
-    string line, word; 
-    int size = 0;
-    if(file.is_open()){
-        while(getline(file,word,',')){
-            landscape.push_back(stod(word));
-            size++;
-        }
-    }
-    else {
-        cout<<"Could not open the file\n";
-    }
-    // vector<double> landscape;
-    // int size = 20;
-    // for (int i=0;i<size;i++){
-    //     landscape.push_back(round(i/5));
-    //     // landscape.push_back(i%10);
-    // } 
-    // cout << "landscape:" << endl;
-    // for (int i=0; i<landscape.size();i++){
-    //     if (i==10){
-    //         cout << "\n";
-    //     }
-    //     cout << "\t" << landscape[i];
-    // }
-    // window of size 10
-    vector<double> diversity;
-    vector<double> difference;
-    vector<double> width;
-    for (int p2=1; p2<18; p2++){
+// TODO: create function that has landscape passed in (by reference, but will not be modified), as well as diversity, difference, and width (passed by reference to be modified). Return value of int, so should return 0 for success
+
+int measure1D(vector<double>& landscape, vector<double>& diversity, vector<double>& difference, vector<double>& width) {
+
+    int size = landscape.size();
+    int max_window_size = min(size, 18);
+    for (int p2=1; p2<max_window_size; p2++){
         int samp_size = pow(2,p2);
+        if (samp_size > size) {
+            println("Skipping p2 = %d, samp_size = %d, size = %d due to samp_size > size", p2, samp_size, size);
+            continue;
+        }
         cout << p2 << endl;
-        // int samp_size = 5;
+
         // initialize window
         vector<double> samp;
         for (int i=0; i<samp_size; i++){
             samp.push_back(landscape[i]);
         }
+
         // calculation on the initial window
         double tempdiv = 0;
         sort(samp.begin(),samp.end());
@@ -117,24 +96,24 @@ int main() {
             if (drop_change){
                 if (landscape.at(i-samp_size) == tempmin){
                     tempmin = *min_element(landscape.begin()+i-samp_size+1,landscape.begin()+i);
-                } 
+                }
                 if (landscape.at(i-samp_size) == tempmax){
                     tempmax = *max_element(landscape.begin()+i-samp_size+1,landscape.begin()+i);
-                } 
-            } 
+                }
+            }
             if (add_change){
                 if (landscape.at(i) < tempmin){
                     tempmin = landscape.at(i);
-                } 
+                }
                 if (landscape.at(i) > tempmax){
                     tempmax = landscape.at(i);
-                } 
+                }
             }
             window_diff = tempmax - tempmin;
             tempdiff += window_diff;
             // cout << "\twindiff" << window_diff << endl;
             // width
-            // recalculate window_var 
+            // recalculate window_var
             double window_mean_old = window_mean;
             window_mean = window_mean_old + (landscape.at(i) - landscape.at(i-samp_size))/samp_size;
             window_var = window_var + pow(window_mean_old,2) - pow(window_mean, 2) + (pow(landscape.at(i),2)-pow(landscape.at(i-samp_size),2))/samp_size;
@@ -151,23 +130,18 @@ int main() {
         difference.push_back(tempdiff);
         width.push_back(tempvar);
     }
+
+    return 0;
+
+}
+
+int print_stat_to_csv(vector<double> stat, std::string file_name) {
     ofstream myfile;
-    myfile.open ("test_div.csv");
-    for (int i = 0; i < diversity.size()-1; i++){
-        myfile << diversity[i] << ",";
+    myfile.open(file_name);
+    for (int i = 0; i < stat.size()-1; i++) {
+        myfile << stat[i] << ",";
     }
-    myfile << diversity[diversity.size()-1];
+    myfile << stat[stat.size()-1];
     myfile.close();
-    myfile.open ("test_diff.csv");
-    for (int i = 0; i < difference.size()-1; i++){
-        myfile << difference[i] << ",";
-    }
-    myfile << difference[difference.size()-1];
-    myfile.close();
-    myfile.open ("test_width.csv");
-    for (int i = 0; i < width.size()-1; i++){
-        myfile << width[i] << ",";
-    }
-    myfile << width[width.size()-1];
-    myfile.close();
+    return 0;
 }

@@ -21,6 +21,7 @@
 #include <cxxopts.hpp> // to handle cmdline args
 #include "ga++.h"
 #include "tree.h"
+#include "measure1D.cpp"
 #include <mxx/reduction.hpp>
 using namespace std;
 
@@ -29,7 +30,8 @@ using namespace std;
 #define println(...) { if(me == 0) { printf(__VA_ARGS__); printf("\n"); } }
 #define print(...) { printf(__VA_ARGS__); }
 
-#define GHOSTS 2 // TODO: check what this should actually be in order to optimize and maintain correctness
+#define GHOSTS 2
+#define GA_DIMS 2 // use 2 dims for array, just set one dim to size 1 when using 1D
 
 typedef std::tuple<int, int, cell_type> cell_update;
 
@@ -107,32 +109,46 @@ int main(int argc, char *argv[]) {
 		MPI_Finalize();
 		exit(1);
 	}
-	int dims[ndims];
-	int grid_ld[ndims];
-	int lo[ndims], hi[ndims];
-	int ghost_grid_ld[ndims - 1];
-	int ghost_dims[ndims];
-	int ghost_width[ndims];
+    // always use a "2D" array, but for 1D have the second dimension be 1
+	int dims[GA_DIMS];
+	int grid_ld[GA_DIMS];
+	int lo[GA_DIMS], hi[GA_DIMS];
+	int ghost_grid_ld[GA_DIMS - 1];
+	int ghost_dims[GA_DIMS];
+	int ghost_width[GA_DIMS];
 	double *land_grid_ptr, *ghost_grid_ptr;
 	FILE *fp;
 
 	// boolean options
-	bool generate_tree = result["tree"].as<bool>(); // TODO: implement option in code
-	bool file_out = result["file_out"].as<bool>(); // TODO: implement option in code
-	bool run_div_stat = result["div"].as<bool>(); // TODO: implement option in code
-	bool run_width_stat = result["width"].as<bool>(); // TODO: implement option in code
-	bool run_diff_stat = result["diff"].as<bool>(); // TODO: implement option in code
+	bool generate_tree = result["tree"].as<bool>();
+	bool file_out = result["file_out"].as<bool>();
+	bool run_div_stat = result["div"].as<bool>();
+	bool run_width_stat = result["width"].as<bool>();
+	bool run_diff_stat = result["diff"].as<bool>();
+    if (ndims == 1 && (run_div_stat || run_width_stat || run_diff_stat)) {
+        run_div_stat = true;
+        run_width_stat = true;
+        run_diff_stat = true;
+    }
 
 	start_time = std::chrono::system_clock::now();
 
 	// grid for average across reps
 	GA_Mask_sync(0, 0); // turns off sync when updating ghosts
-	for (size_t i = 0; i < ndims; i++) {
-		dims[i] = size;
-		ghost_width[i] = GHOSTS;
-	}
+    dims[1] = size;
+    ghost_width[1] = GHOSTS;
+    int total_cells = size;
+    if (ndims == 2) {
+        dims[0] = size;
+        ghost_width[0] = GHOSTS;
+        total_cells = size*size;
+    }
+    else {
+        dims[0] = 1;
+        ghost_width[0] = 0;
+    }
 	char land_grid_name[] = "land grid";
-	int ga_land_grid = NGA_Create_ghosts(C_DBL, ndims, dims, ghost_width, land_grid_name, NULL);
+	int ga_land_grid = NGA_Create_ghosts(C_DBL, GA_DIMS, dims, ghost_width, land_grid_name, NULL);
 	if (ga_land_grid == 0) {
 		char create_err[] = "Failure for NGA_Create_ghosts()";
 		GA_Error(create_err, 1);
@@ -147,7 +163,7 @@ int main(int argc, char *argv[]) {
 
 	println("Inputs:");
 	println("\trepetitions = %d", nrep);
-	println("\tsize = %d%s%d", size, "x", size);
+	println("\tsize = %d", size);
 	println("\tdimensions = %d", ndims);
 	println("\tindividuals per patch = %f", 1 / p);
 	println("\tmutation size = %f", mutsize);
@@ -167,6 +183,7 @@ int main(int argc, char *argv[]) {
 	StochasticLib1 sto(time(0) + me * 7);	// Stochastic RNG
 	int local_rows = (hi[0] - lo[0] + 1);
 	int local_cols = (hi[1] - lo[1] + 1);
+    //println("local_rows = %d, local_cols = %d", local_rows, local_cols);
 	int local_area = local_cols * local_rows;
 	double land_mask_data[local_area];
 	double* land_mask[local_rows];
@@ -217,9 +234,9 @@ int main(int argc, char *argv[]) {
 				if (RanGen.Random() < 0.5) ratio = 1 / ratio;
 				float probsuccess = p * ratio / (p * (ratio - 1) + 1);
 				if (RanGen.Random() <= probsuccess) {
-					cell_type old_val = ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS];
+					cell_type old_val = ghost_grid_ptr[(i + ghost_width[0]) * ghost_grid_ld[0] + j + ghost_width[1]];
 					cell_type new_val = old_val * ratio;
-					ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] = new_val;
+					ghost_grid_ptr[(i + ghost_width[0]) * ghost_grid_ld[0] + j + ghost_width[1]] = new_val;
 					if (generate_tree)
 						speciation_events.push_back(make_tuple(step, old_val, new_val));
 				}
@@ -233,16 +250,16 @@ int main(int argc, char *argv[]) {
 							continue;
 						if (col >= local_cols - 1 || col <= 0)
 							continue;
-						cell_type local_max = ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS];
+						cell_type local_max = ghost_grid_ptr[(row + ghost_width[0]) * ghost_grid_ld[0] + col + ghost_width[1]];
 						for (int xx = -1; xx <= 1; xx++) {
 							for (int yy = -1; yy <= 1; yy++) {
 								int neighbor_row = row + xx;
 								int neighbor_col = col + yy;
-								local_max = std::max(local_max, ghost_grid_ptr[(neighbor_row + GHOSTS) * ghost_grid_ld[0] + neighbor_col + GHOSTS]);
+								local_max = std::max(local_max, ghost_grid_ptr[(neighbor_row + ghost_width[0]) * ghost_grid_ld[0] + neighbor_col + ghost_width[1]]);
 							}
 						}
 						if(row >= 0 && col >= 0 && row < local_rows && col < local_cols)
-							land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] * (1 - p));
+							land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + ghost_width[0]) * ghost_grid_ld[0] + col + ghost_width[1]] * (1 - p));
 					}
 				}
 			}
@@ -262,8 +279,8 @@ int main(int argc, char *argv[]) {
 							for (int x = -1; x <= 1; x++) {
 								for (int y = -1; y <= 1; y++) {
 									if ((x != 0 || y != 0)) {
-										neighborhood[inv_index] = ghost_grid_ptr[(i + x + GHOSTS) * ghost_grid_ld[0] + j + y + GHOSTS];
-										inv[inv_index] = p * neighborhood[inv_index] / (p * neighborhood[inv_index] + ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] * (1 - p));
+										neighborhood[inv_index] = ghost_grid_ptr[(i + x + ghost_width[0]) * ghost_grid_ld[0] + j + y + ghost_width[1]];
+										inv[inv_index] = p * neighborhood[inv_index] / (p * neighborhood[inv_index] + ghost_grid_ptr[(i + ghost_width[0]) * ghost_grid_ld[0] + j + ghost_width[1]] * (1 - p));
 										inv_sum += inv[inv_index];
 										inv_index++;
 									}
@@ -277,7 +294,7 @@ int main(int argc, char *argv[]) {
 									weighted_rand -= inv[inv_index];
 									inv_index++;
 								}
-								if (neighborhood[inv_index] != ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS]) {
+								if (neighborhood[inv_index] != ghost_grid_ptr[(i + ghost_width[0]) * ghost_grid_ld[0] + j + ghost_width[1]]) {
 									updates.push_back({i, j, neighborhood[inv_index]});
 								}
 							}
@@ -287,7 +304,7 @@ int main(int argc, char *argv[]) {
 			}
 
 			for (const auto &[i, j, val] : updates) {
-				ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS] = val;
+				ghost_grid_ptr[(i + ghost_width[0]) * ghost_grid_ld[0] + j + ghost_width[1]] = val;
 				for (int x = -1; x <= 1; x++) {
 					for (int y = -1; y <= 1; y++) {
 						row = i + x;
@@ -305,8 +322,8 @@ int main(int argc, char *argv[]) {
 									continue;
 								if (col >= local_cols - 1 || col <= 0)
 									continue;
-								if (ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] != val && ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] > local_max) {
-									local_max = ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS];
+								if (ghost_grid_ptr[(row + ghost_width[0]) * ghost_grid_ld[0] + col + ghost_width[1]] != val && ghost_grid_ptr[(row + ghost_width[0]) * ghost_grid_ld[0] + col + ghost_width[1]] > local_max) {
+									local_max = ghost_grid_ptr[(row + ghost_width[0]) * ghost_grid_ld[0] + col + ghost_width[1]];
 								}
 							}
 						}
@@ -318,7 +335,7 @@ int main(int argc, char *argv[]) {
 						}
 						else {
 							if(row >= 0 && col >= 0 && row < local_rows && col < local_cols)
-								land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + GHOSTS) * ghost_grid_ld[0] + col + GHOSTS] * (1 - p));
+								land_mask[row][col] = local_max * p / (local_max * p + ghost_grid_ptr[(row + ghost_width[0]) * ghost_grid_ld[0] + col + ghost_width[1]] * (1 - p));
 						}
 					}
 				}
@@ -329,8 +346,8 @@ int main(int argc, char *argv[]) {
 				cell_type land_grid_mean = 0;
 				for (size_t i = 0; i < local_rows; i++)
 					for (size_t j = 0; j < local_cols; j++)
-						land_grid_mean += ghost_grid_ptr[(i + GHOSTS) * ghost_grid_ld[0] + j + GHOSTS];
-				land_grid_mean = land_grid_mean / (size * size);
+						land_grid_mean += ghost_grid_ptr[(i + ghost_width[0]) * ghost_grid_ld[0] + j + ghost_width[1]];
+				land_grid_mean = land_grid_mean / (total_cells);
 				MPI_Allreduce(MPI_IN_PLACE, &land_grid_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 				println("Global average at step %d = %f", step, land_grid_mean);
 				if (land_grid_mean > 100) {
@@ -362,6 +379,7 @@ int main(int argc, char *argv[]) {
 			fp = fopen(outfile.c_str(), "w");
 			GA_Print_csv_file(fp, ga_land_grid);
 			fclose(fp);
+            println("Wrote results to file %s", outfile.c_str());
 		}
 
 		// gather speciation events
@@ -369,7 +387,7 @@ int main(int argc, char *argv[]) {
 			vector<tuple<size_t, cell_type, cell_type>> global_speciation_events = mxx::gatherv(speciation_events, 0);
 			// gather extant species set
 			debug("Gathering extant species list");
-			set<cell_type> extant_species(ghost_grid_ptr+GHOSTS*ghost_grid_ld[0]+GHOSTS, ghost_grid_ptr+(local_rows + GHOSTS) * ghost_grid_ld[0] + local_cols + GHOSTS);
+			set<cell_type> extant_species(ghost_grid_ptr+ghost_width[0]*ghost_grid_ld[0]+ghost_width[1], ghost_grid_ptr+(local_rows + ghost_width[0]) * ghost_grid_ld[0] + local_cols + ghost_width[1]);
 			vector<cell_type> extant_species_vec(extant_species.begin(), extant_species.end());
 			debug("Local extant species: %lu", extant_species.size());
 			vector<cell_type> global_extant_species_vec = mxx::gatherv(extant_species_vec, 0);
@@ -415,7 +433,43 @@ int main(int argc, char *argv[]) {
 					fout << toString_final(tree, timescale) << endl;
 					delete_tree(tree);
 					fout.close();
+                    println("Wrote results to file %s", outfile.c_str());
 				}
+			}
+		}
+
+		if (run_div_stat || run_width_stat || run_diff_stat) {
+			if (ndims == 1) {
+				// TODO: check the difference between land_grid_ptr and ghost_grid_ptr
+				// println("land_grid_ptr - ghost_grid_ptr = %d", land_grid_ptr - ghost_grid_ptr);
+				// println("lo[0] = %d, hi[0] = %d", lo[0], hi[0]);
+				// println("lo[1] = %d, hi[1] = %d", lo[1], hi[1]);
+				// println("local_cols = %d", local_cols);
+				vector<double> local_landscape_vec(land_grid_ptr, land_grid_ptr+local_cols);
+				// println("local_landscape_vec size = %d", local_landscape_vec.size());
+				std::string landscape_str(local_landscape_vec.begin(), local_landscape_vec.end());
+				// println("local_landscape_vec content = %s", landscape_str.c_str());
+				vector<double> landscape = mxx::gatherv(local_landscape_vec, 0);
+				// println("landscape size = %d", landscape.size());
+				if (me == 0) {
+					vector<double> diversity;
+					vector<double> difference;
+					vector<double> width;
+					std::string div_file = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_div.csv";
+					std::string diff_file = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_diff.csv";;
+					std::string width_file = result["outfile"].as<std::string>() + "_rep" + std::to_string(rep) + "_width.csv";;
+					measure1D(landscape, diversity, difference, width);
+					print_stat_to_csv(diversity, div_file);
+					println("Saved diversity to %s", div_file.c_str());
+					print_stat_to_csv(difference, diff_file);
+					println("Saved difference to %s", diff_file.c_str());
+					print_stat_to_csv(width, width_file);
+					println("Saved width to %s", width_file.c_str());
+				}
+			} else if (ndims == 2) {
+				// TODO: implement summary stats for 2D
+			} else {
+				println("Summary statistics unavailable for %d dimensions", ndims);
 			}
 		}
 
@@ -427,8 +481,6 @@ int main(int argc, char *argv[]) {
 	end_time = std::chrono::system_clock::now();
 	std::chrono::duration<double> total_time = end_time - start_time;
 	println("Total run time = %fs", total_time.count());
-	if (file_out)
-		println("Wrote results to file %s", outfile.c_str());
 	fflush(stdout);
 
 	GA_Destroy(ga_land_grid);
